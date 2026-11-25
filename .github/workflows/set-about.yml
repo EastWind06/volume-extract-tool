@@ -1,0 +1,27 @@
+name: 设置仓库简介
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/set-about.yml'
+
+permissions:
+  contents: write
+  metadata: write
+
+jobs:
+  set-about:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 更新仓库 About 描述
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DESC: "按顺序解压 RAR/ZIP 分卷压缩包，确认数据写入后自动删除已处理分卷，节省磁盘空间；内置 UnRAR，支持预校验与安全审计。"
+        run: |
+          curl -sS -X PATCH \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO" \
+            -d "$(python3 -c 'import json,os;print(json.dumps({"description":os.environ["DESC"]}))')"
