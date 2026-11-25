@@ -1,0 +1,37 @@
+name: 发布 Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 创建发行版并上传 exe
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: '*.exe'
+          draft: false
+          prerelease: false
+          body: |
+            ## 分卷压缩包分批解压工具 v1.0
+
+            单文件 exe（约 11.4 MB），内置官方 UnRAR.exe，无需安装 Python，双击即可运行。
+
+            ### 主要功能
+            - 按顺序解压 RAR / ZIP 分卷，确认数据写入后回收已处理分卷，避免双倍磁盘占用
+            - 预校验全部分卷、自动删除二次确认、停止按钮、进度条、审计日志
+            - 界面底部说明含署名 by东风敬我桂花酒
+
+            ### 使用提示
+            下载 `分卷解压工具.exe` 直接运行；如需演练自动删除，请先把测试分卷复制到别处再操作。
