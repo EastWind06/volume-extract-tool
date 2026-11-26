@@ -99,24 +99,51 @@ def _menu_command(exe: str, param: str = "%1") -> str:
     return f'"{exe}" --path "{param}"'
 
 
-def install_context_menu() -> int:
-    """把右键菜单写入当前用户注册表（无需管理员权限）。"""
+MENU_BASES = [
+    (r"Software\Classes\*\shell", "%1"),                     # 文件（含分卷压缩包）
+    (r"Software\Classes\Directory\shell", "%1"),             # 文件夹
+    (r"Software\Classes\Directory\Background\shell", "%V"),  # 文件夹空白处
+]
+
+
+def menu_install_status() -> str:
+    """返回：'missing'（未安装）/ 'ok'（指向当前 exe）/ 'moved'（指向其他位置）。"""
     if os.name != "nt":
-        print("右键菜单仅支持 Windows")
-        return 1
+        return "missing"
+    exe = str(Path(sys.executable).resolve()).lower()
+    found = 0
+    matched = 0
+    for base, _ in MENU_BASES:
+        try:
+            cmd = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 base + "\\" + MENU_KEY_NAME + "\\command")
+            value = winreg.QueryValueEx(cmd, "")[0]
+            winreg.CloseKey(cmd)
+            found += 1
+            if exe in str(value).lower():
+                matched += 1
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+    if found == 0:
+        return "missing"
+    return "ok" if matched == found else "moved"
+
+
+def install_context_menu(emit=None) -> bool:
+    """把右键菜单写入当前用户注册表（无需管理员权限）。emit 为可选日志回调。"""
+    say = emit or (lambda m: print(m))
+    if os.name != "nt":
+        say("右键菜单仅支持 Windows")
+        return False
     if not FROZEN:
-        print("请直接用【分卷解压工具.exe --install-menu】安装，源码模式注册的会是 Python 解释器。")
-        return 1
+        say("请用【分卷解压工具.exe】操作：源码模式注册的是 Python 解释器，不能用于右键。")
+        return False
 
     exe = str(Path(sys.executable).resolve())
-    targets = [
-        (r"Software\Classes\*\shell", "%1"),                     # 文件（含分卷压缩包）
-        (r"Software\Classes\Directory\shell", "%1"),             # 文件夹
-        (r"Software\Classes\Directory\Background\shell", "%V"),  # 文件夹空白处
-    ]
-    done = []
     try:
-        for base, param in targets:
+        for base, param in MENU_BASES:
             key_path = base + "\\" + MENU_KEY_NAME
             key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, MENU_TITLE)
@@ -125,29 +152,23 @@ def install_context_menu() -> int:
             winreg.SetValueEx(cmd, "", 0, winreg.REG_SZ, _menu_command(exe, param))
             winreg.CloseKey(cmd)
             winreg.CloseKey(key)
-            done.append(key_path)
-        print("右键菜单安装成功，已注册位置：")
-        for d in done:
-            print("  - HKCU\\" + d)
-        print(f"命令：{_menu_command(exe)}")
-        return 0
+        say("右键菜单安装成功，已注册：文件、文件夹、文件夹空白处三处。")
+        say(f"程序路径：{exe}")
+        say("现在右键压缩包或文件夹，即可看到【用分卷解压工具打开】。")
+        return True
     except Exception as exc:
-        print(f"安装失败：{exc}")
-        return 1
+        say(f"安装失败：{exc}")
+        return False
 
 
-def uninstall_context_menu() -> int:
+def uninstall_context_menu(emit=None) -> bool:
     """移除右键菜单条目，不影响程序本身。"""
+    say = emit or (lambda m: print(m))
     if os.name != "nt":
-        print("右键菜单仅支持 Windows")
-        return 1
-    bases = [
-        r"Software\Classes\*\shell",
-        r"Software\Classes\Directory\shell",
-        r"Software\Classes\Directory\Background\shell",
-    ]
+        say("右键菜单仅支持 Windows")
+        return False
     removed = 0
-    for base in bases:
+    for base, _ in MENU_BASES:
         try:
             winreg.DeleteKey(winreg.HKEY_CURRENT_USER,
                              base + "\\" + MENU_KEY_NAME + "\\command")
@@ -157,9 +178,9 @@ def uninstall_context_menu() -> int:
         except FileNotFoundError:
             pass
         except Exception as exc:
-            print(f"清理失败 {base}: {exc}")
-    print(f"右键菜单已卸载，移除 {removed} 处。")
-    return 0
+            say(f"清理失败 {base}: {exc}")
+    say(f"右键菜单已卸载，移除 {removed} 处。")
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -988,6 +1009,35 @@ def build_gui(initial_path: str = ""):
     var_status = tk.StringVar(value="就绪")
     ttk.Label(bar, textvariable=var_status, font=("Microsoft YaHei UI", 10)).pack(side="right")
 
+    # 右键菜单安装/卸载按钮（放在状态标签左侧）
+    def menu_button_text() -> str:
+        st = menu_install_status()
+        return {"missing": "安装右键菜单", "ok": "卸载右键菜单", "moved": "修复右键菜单"}[st]
+
+    btn_menu = ttk.Button(bar, text=menu_button_text(), width=16)
+
+    def on_menu_click():
+        st = menu_install_status()
+        if st == "ok":
+            if not messagebox.askyesno("卸载右键菜单",
+                                       "确定移除资源管理器的右键菜单吗？\n（不影响程序本身，可随时重新安装）"):
+                return
+            ok = uninstall_context_menu(lambda m: emit("INFO", m))
+            if ok:
+                messagebox.showinfo("完成", "右键菜单已卸载。")
+        else:
+            tip = ("检测到右键菜单指向的是其他位置的程序，将更新为当前 exe。" if st == "moved"
+                   else "安装后，右键压缩包或文件夹即可直接用本工具打开，无需预先启动软件。\n\n是否安装？")
+            if st == "missing" and not messagebox.askyesno("安装右键菜单", tip):
+                return
+            ok = install_context_menu(lambda m: emit("INFO", m))
+            if ok:
+                messagebox.showinfo("完成", "右键菜单已安装！\n现在右键压缩包或文件夹，选择【用分卷解压工具打开】即可。")
+        btn_menu.configure(text=menu_button_text())
+
+    btn_menu.configure(command=on_menu_click)
+    btn_menu.pack(side="right", padx=(0, 12))
+
     var_progress = tk.DoubleVar(value=0)
     pb = ttk.Progressbar(main, variable=var_progress, maximum=100, mode="determinate")
     pb.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(2, 8))
@@ -1255,9 +1305,9 @@ def main() -> int:
     try:
         argv = sys.argv[1:]
         if "--install-menu" in argv:
-            return install_context_menu()
+            return 0 if install_context_menu() else 1
         if "--uninstall-menu" in argv:
-            return uninstall_context_menu()
+            return 0 if uninstall_context_menu() else 1
         if "--cli" in argv:
             return cli_main([a for a in argv if a != "--cli"])
         initial_path = ""
