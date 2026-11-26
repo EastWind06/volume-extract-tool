@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-分卷压缩包分批解压工具 v1.3
+分卷压缩包分批解压工具 v1.4
 ===========================
 
 功能：按顺序解压分卷，在确认后续分卷已开始读取、当前分卷数据已写入输出文件后，
@@ -54,7 +54,7 @@ else:
     APP_DIR = BASE_DIR
 TOOLS_DIR = BASE_DIR / "tools"
 AUDIT_DIR = APP_DIR / "logs"
-APP_TITLE = "分卷压缩包分批解压工具 v1.3"
+APP_TITLE = "分卷压缩包分批解压工具 v1.4"
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SIGNATURE = "by东风敬我桂花酒"
 
@@ -792,6 +792,12 @@ def rar_extract(vset: VolumeSet, dest: Path, password: str, ctx: TaskContext,
             if not ctx.error_seen:
                 ctx.error_seen = True
             ctx.log(f"校验: 检测到错误 → {line}", "ERR")
+        # 实时进度：UnRAR 解压时的百分比行形如 "Extracting  data.bin   45% OK"
+        pm = re.search(r"(\d{1,3})\s*%", line)
+        if pm and "Extracting" in line:
+            pct = min(100.0, float(pm.group(1)))
+            # 以当前分卷为区间，叠加 UnRAR 输出的单文件百分比，进度条持续推进
+            ctx.progress(min(100.0, (current_index + pct / 100.0) / vset.count * 100))
         if re.search(r"\d{1,3}%|\bOK\b|Extracting\s", line):
             saw_data = True
         if line.strip() and line_count % 1 == 0:
@@ -800,6 +806,7 @@ def rar_extract(vset: VolumeSet, dest: Path, password: str, ctx: TaskContext,
     rc = proc.wait()
     success = (rc == 0 and all_ok and not ctx.error_seen and not ctx.stop.is_set())
     if success:
+        ctx.progress(100.0)
         ctx.log(f"校验: UnRAR 退出码 0 且输出 All OK，解压完整 | "
                 f"剩余磁盘空间: {free_gb(dest):.2f} GB", "OK")
         dm.delete_all("整套分卷解压完成且 All OK 校验通过")
@@ -840,11 +847,25 @@ def zip_precheck(vset: VolumeSet, ctx: TaskContext) -> bool:
     try:
         with zipfile.ZipFile(stream) as zf:
             infos = zf.infolist()
-            ctx.log(f"压缩包内共 {len(infos)} 个条目，开始逐条 CRC 校验", "STEP")
-            bad = zf.testzip()
-            if ctx.stop.is_set():
-                raise StopRequested()
+            files = [i for i in infos if not i.is_dir()]
+            ctx.log(f"压缩包内共 {len(infos)} 个条目（{len(files)} 个文件），开始逐条 CRC 校验", "STEP")
+            bad = None
+            for idx, info in enumerate(files):
+                if ctx.stop.is_set():
+                    raise StopRequested()
+                try:
+                    with zf.open(info) as src:
+                        while True:
+                            if ctx.stop.is_set():
+                                raise StopRequested()
+                            if not src.read(1024 * 1024):
+                                break
+                except zipfile.BadZipFile:
+                    bad = info.filename
+                    break
+                ctx.progress((idx + 1) / max(1, len(files)) * 100)
             if bad is None:
+                ctx.progress(100.0)
                 ctx.log(f"预校验结果：全部条目 CRC 通过 | "
                         f"剩余磁盘空间: {free_gb(vset.folder):.2f} GB", "OK")
                 return True
@@ -867,6 +888,8 @@ def zip_extract(vset: VolumeSet, dest: Path, ctx: TaskContext, dm: DeletionManag
     try:
         with zipfile.ZipFile(stream) as zf:
             infos = zf.infolist()
+            total_bytes = sum(i.file_size for i in infos if not i.is_dir())
+            done_bytes = 0
             ctx.log(f"压缩包内共 {len(infos)} 个条目 | "
                     f"剩余磁盘空间: {free_gb(dest):.2f} GB", "STEP")
             for i, info in enumerate(infos):
@@ -887,9 +910,13 @@ def zip_extract(vset: VolumeSet, dest: Path, ctx: TaskContext, dm: DeletionManag
                         if not chunk:
                             break
                         out.write(chunk)
+                        done_bytes += len(chunk)
+                        if total_bytes:
+                            ctx.progress(min(100.0, done_bytes / total_bytes * 100))
                 os.replace(tmp, target)   # 条目完整落盘后才改正式名
                 extracted += 1
-                ctx.progress((i + 1) / max(1, len(infos)) * 100)
+                if not total_bytes:
+                    ctx.progress((i + 1) / max(1, len(infos)) * 100)
 
                 # 当前条目的本地头已读、数据已写入且 CRC 由 zipfile 校验通过，
                 # 因此本地头之前的分卷不会再被访问，可以安全回收。
@@ -1117,9 +1144,14 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
     btn_menu.configure(command=on_menu_click)
     btn_menu.pack(side="right", padx=(0, 12))
 
+    prog_frame = ttk.Frame(main)
+    prog_frame.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(2, 8))
     var_progress = tk.DoubleVar(value=0)
-    pb = ttk.Progressbar(main, variable=var_progress, maximum=100, mode="determinate")
-    pb.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(2, 8))
+    pb = ttk.Progressbar(prog_frame, variable=var_progress, maximum=100, mode="determinate")
+    pb.pack(side="left", fill="x", expand=True)
+    var_pct = tk.StringVar(value="0%")
+    ttk.Label(prog_frame, textvariable=var_pct, width=7, anchor="e",
+              font=("Microsoft YaHei UI", 10)).pack(side="right", padx=(8, 0))
 
     # ---------- 日志区 ----------
     log_box = scrolledtext.ScrolledText(main, height=24, wrap="word",
@@ -1153,7 +1185,10 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
             while True:
                 level, msg = q.get_nowait()
                 if level == "__progress__":
-                    var_progress.set(max(0.0, min(100.0, float(msg))))
+                    val = max(0.0, min(100.0, float(msg)))
+                    if val >= var_progress.get():   # 只前进不后退，避免多文件重置造成跳动
+                        var_progress.set(val)
+                    var_pct.set(f"{int(round(var_progress.get()))}%")
                     continue
                 if level == "__done__":
                     set_busy(False)
@@ -1163,6 +1198,7 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
                     elif msg:
                         var_status.set("完成")
                         var_progress.set(100)
+                        var_pct.set("100%")
                         emit("OK", "任务完成")
                     else:
                         var_status.set("失败/未通过")
@@ -1297,6 +1333,7 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
         pwd = var_pwd.get()
         ctx = TaskContext(emit, stop_event)
         var_progress.set(0)
+        var_pct.set("0%")
         set_busy(True)
         var_status.set("正在校验…" if precheck else "正在解压…")
         emit("STEP", "=" * 30 + ("预校验" if precheck else "开始解压") + "=" * 30)

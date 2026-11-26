@@ -8,6 +8,7 @@
 - **预校验**：解压前可校验全部分卷完整性，缺失或损坏时拒绝删除任何文件
 - **安全护栏**：只删同组已处理分卷，绝不删未处理分卷或成品；输出目录与分卷目录冲突时自动改到子目录
 - **可控开关**：自动删除默认关闭，开启后必须勾选风险确认；另有“只解压不删”模式
+- **实时进度条**：解压过程中按 UnRAR 输出的百分比 / ZIP 已解压字节实时推进，右侧同步显示百分比
 - **全程日志**：每一步打印正在解压 partN、校验结果、是否删除 partN-1、剩余磁盘空间
 - **内置引擎**：随包附带官方 UnRAR.exe，双击 exe 即可运行，无需安装 Python 或 WinRAR
 
@@ -38,7 +39,7 @@
 
 ## 下载与使用
 
-从 [Releases](https://github.com/EastWind06/volume-extract-tool/releases/tag/v1.0) 下载 `volume-extract-tool-v1.0.exe`，双击运行即可。
+从 [Releases](https://github.com/EastWind06/volume-extract-tool/releases/tag/v1.4) 下载 `volume-extract-tool-v1.4.exe`，双击运行即可。
 
 演练自动删除前，请先把分卷复制到其他目录再操作——删除不可撤销。
 
