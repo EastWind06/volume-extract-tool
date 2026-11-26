@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-分卷压缩包分批解压工具 v1.4
+分卷压缩包分批解压工具 v1.5
 ===========================
 
 功能：按顺序解压分卷，在确认后续分卷已开始读取、当前分卷数据已写入输出文件后，
@@ -54,9 +54,10 @@ else:
     APP_DIR = BASE_DIR
 TOOLS_DIR = BASE_DIR / "tools"
 AUDIT_DIR = APP_DIR / "logs"
-APP_TITLE = "分卷压缩包分批解压工具 v1.4"
+APP_TITLE = "分卷压缩包分批解压工具 v1.5"
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SIGNATURE = "by东风敬我桂花酒"
+PROJECT_URL = "https://github.com/EastWind06/volume-extract-tool"
 
 
 def prepare_console() -> None:
@@ -1064,7 +1065,67 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
     main.pack(fill="both", expand=True)
 
     title = ttk.Label(main, text=APP_TITLE, font=("Microsoft YaHei UI", 16, "bold"))
-    title.grid(row=0, column=0, columnspan=4, sticky="w")
+    title.grid(row=0, column=0, columnspan=3, sticky="w")
+
+    def show_about() -> None:
+        """弹出关于窗口：软件作用、主要功能、项目地址与署名。"""
+        import webbrowser
+
+        dlg = tk.Toplevel(root)
+        dlg.title("关于")
+        dlg.resizable(False, False)
+        dlg.transient(root)
+        dlg.grab_set()
+        dlg.update_idletasks()
+        w, h = 520, 500
+        x = root.winfo_x() + max(0, (root.winfo_width() - w) // 2)
+        y = root.winfo_y() + max(0, (root.winfo_height() - h) // 2)
+        dlg.geometry(f"{w}x{h}+{x}+{y}")
+
+        frm = ttk.Frame(dlg, padding=18)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text=APP_TITLE,
+                  font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w")
+        ttk.Label(frm, text=f"{SIGNATURE}  ·  单文件绿色版", foreground="#666666",
+                  font=("Microsoft YaHei UI", 9)).pack(anchor="w", pady=(2, 12))
+
+        intro = (
+            "作用：按顺序解压 RAR / ZIP 分卷压缩包，确认当前分卷数据已写入后，"
+            "自动回收已处理完毕的分卷，显著降低磁盘占用，无需预留双倍空间。\n\n"
+            "特性：内置官方 UnRAR.exe；预校验全部分卷；自动删除默认关闭且需二次确认；"
+            "实时进度条；逐卷删除审计日志；支持资源管理器右键菜单快捷解压。\n\n"
+            "安全：只删同组已处理分卷，绝不误删未处理分卷或解压成品；"
+            "分卷损坏、缺失、密码错误或任务停止时不执行删除。"
+        )
+        ttk.Label(frm, text=intro, wraplength=484, justify="left",
+                  font=("Microsoft YaHei UI", 10)).pack(anchor="w")
+
+        ttk.Label(frm, text="项目地址：",
+                  font=("Microsoft YaHei UI", 10, "bold")).pack(anchor="w", pady=(14, 4))
+        url_frame = ttk.Frame(frm)
+        url_frame.pack(fill="x")
+        ent_url = ttk.Entry(url_frame, font=("Consolas", 9))
+        ent_url.insert(0, PROJECT_URL)
+        ent_url.configure(state="readonly")
+        ent_url.pack(side="left", fill="x", expand=True)
+
+        def copy_url() -> None:
+            dlg.clipboard_clear()
+            dlg.clipboard_append(PROJECT_URL)
+            btn_copy.configure(text="已复制")
+
+        btn_copy = ttk.Button(url_frame, text="复制", width=7, command=copy_url)
+        btn_copy.pack(side="left", padx=(6, 0))
+
+        btn_row = ttk.Frame(frm)
+        btn_row.pack(fill="x", pady=(16, 0))
+        ttk.Button(btn_row, text="打开项目主页", width=16,
+                   command=lambda: webbrowser.open(PROJECT_URL)).pack(side="left")
+        ttk.Button(btn_row, text="关闭", width=10,
+                   command=dlg.destroy).pack(side="right")
+
+    btn_about = ttk.Button(main, text="关于", width=8, command=show_about)
+    btn_about.grid(row=0, column=3, sticky="e")
 
     warning = (
         "风险提示：自动删除模式下，一旦分卷损坏或缺失，整套文件将报废且无法重来；"

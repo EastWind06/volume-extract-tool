@@ -39,7 +39,7 @@
 
 ## 下载与使用
 
-从 [Releases](https://github.com/EastWind06/volume-extract-tool/releases/tag/v1.4) 下载 `volume-extract-tool-v1.4.exe`，双击运行即可。
+从 [Releases](https://github.com/EastWind06/volume-extract-tool/releases/tag/v1.5) 下载 `volume-extract-tool-v1.5.exe`，双击运行即可。软件右上角的【关于】按钮可查看软件作用、项目地址与署名。
 
 演练自动删除前，请先把分卷复制到其他目录再操作——删除不可撤销。
 
