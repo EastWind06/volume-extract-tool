@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-分卷压缩包分批解压工具 v1.8
+分卷压缩包分批解压工具 v1.9
 ===========================
 
 功能：按顺序解压分卷，在确认后续分卷已开始读取、当前分卷数据已写入输出文件后，
@@ -54,7 +54,7 @@ else:
     APP_DIR = BASE_DIR
 TOOLS_DIR = BASE_DIR / "tools"
 AUDIT_DIR = APP_DIR / "logs"
-APP_TITLE = "分卷压缩包分批解压工具 v1.8"
+APP_TITLE = "分卷压缩包分批解压工具 v1.9"
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SIGNATURE = "by东风敬我桂花酒"
 PROJECT_URL = "https://github.com/EastWind06/volume-extract-tool"
@@ -1054,28 +1054,30 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox, scrolledtext
 
-    # ============ 视觉主题（深色现代卡片风） ============
+    # ============ macOS 浅色主题 ============
     C = {
-        "bg":        "#0f1216",   # 窗口底色
-        "panel":     "#181d24",   # 卡片
-        "panel2":    "#1f252e",   # 卡片内衬
-        "line":      "#2a323d",   # 描边
-        "txt":       "#e6edf3",   # 主文字
-        "muted":     "#8b98a9",   # 次文字
-        "accent":    "#4c8dff",   # 主色（蓝）
-        "accent_hi": "#6aa2ff",
-        "green":     "#3fb950",
-        "yellow":    "#d29922",
-        "red":       "#f85149",
-        "cyan":      "#39c5cf",
+        "bg":        "#f2f2f7",   # 窗口背景（系统灰）
+        "panel":     "#ffffff",   # 卡片白
+        "panel2":    "#f5f5f7",   # 输入框/内层
+        "line":      "#e3e3e8",   # 分隔线/边框
+        "txt":       "#1d1d1f",   # 主文字
+        "muted":     "#86868b",   # 次文字
+        "accent":    "#0a84ff",   # 系统蓝
+        "accent_hi": "#3d9dff",
+        "green":     "#2faa4a",
+        "yellow":    "#c07a12",
+        "red":       "#d10f16",
+        "tl_red":    "#ff5f57",
+        "tl_yellow": "#febc2e",
+        "tl_green":  "#28c840",
     }
     F = "Microsoft YaHei UI"
-    MONO = "Consolas"
+    MONO = "Consolas/SF Mono"
 
     root = tk.Tk()
     root.title(APP_TITLE)
-    root.geometry("1160x820")
-    root.minsize(1000, 680)
+    root.geometry("1180x860")
+    root.minsize(1020, 700)
     root.configure(bg=C["bg"])
     try:
         root.iconbitmap(default="")
@@ -1086,37 +1088,76 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
     stop_event = threading.Event()
     worker: dict = {"thread": None}
 
-    # ---------- ttk 样式 ----------
+    # ---------- ttk 样式（macOS 观感） ----------
     style = ttk.Style()
     try:
         style.theme_use("clam")
     except Exception:
         pass
-    style.configure("TEntry", fieldbackground=C["panel2"], foreground=C["txt"],
-                    insertcolor=C["txt"], borderwidth=0, padding=6)
+    style.configure("TButton", font=(F, 10), padding=(14, 8), borderwidth=1)
+    style.configure("Pri.TButton", background=C["accent"], foreground="#ffffff",
+                    borderwidth=0, padding=(16, 10), font=(F, 11, "bold"))
+    style.map("Pri.TButton", background=[("active", C["accent_hi"]), ("disabled", "#b7d4f5")],
+              foreground=[("disabled", "#ffffff")])
+    style.configure("Sec.TButton", background=C["panel2"], foreground=C["txt"],
+                    borderwidth=1, padding=(12, 7), font=(F, 10))
+    style.map("Sec.TButton", background=[("active", "#e9e9ee")],
+              foreground=[("active", C["txt"])])
+    style.configure("TEntry", fieldbackground=C["panel"], foreground=C["txt"],
+                    insertcolor=C["accent"], borderwidth=1, padding=7,
+                    font=(F, 10))
     style.configure("TCheckbutton", background=C["panel"], foreground=C["txt"],
                     font=(F, 10))
     style.map("TCheckbutton", background=[("active", C["panel"])],
               foreground=[("active", C["txt"])])
-    style.configure("TProgressbar", troughcolor=C["panel2"],
-                    background=C["accent"], borderwidth=0, thickness=12)
-    style.configure("TScrollbar", background=C["line"], troughcolor=C["panel"],
+    style.configure("TProgressbar", troughcolor=C["line"], background=C["accent"],
+                    borderwidth=0, thickness=9)
+    style.configure("TScrollbar", background="#d6d6db", troughcolor=C["panel"],
                     borderwidth=0, arrowcolor=C["muted"])
 
     # ============ 主容器 ============
     main = tk.Frame(root, bg=C["bg"])
     main.pack(fill="both", expand=True)
 
-    # ---------- 顶部品牌栏 ----------
-    header = tk.Frame(main, bg=C["panel"], height=88)
+    # ---------- 标题栏（含交通灯） ----------
+    header = tk.Frame(main, bg=C["panel"], height=86)
     header.pack(fill="x", side="top")
     header.pack_propagate(False)
-    accent_bar = tk.Frame(header, bg=C["accent"], width=6)
-    accent_bar.pack(side="left", fill="y")
-    tk.Label(header, text="▦", font=(F, 30, "bold"), bg=C["panel"],
-             fg=C["accent"]).pack(side="left", padx=(18, 12))
+
+    lights = tk.Canvas(header, width=70, height=24, bg=C["panel"], highlightthickness=0)
+    for ox, col in ((8, C["tl_red"]), (29, C["tl_yellow"]), (50, C["tl_green"])):
+        lights.create_oval(ox, 6, ox + 14, 20, fill=col, outline="")
+    lights.pack(side="left", padx=(18, 6))
+
+    def win_close():
+        root.destroy()
+
+    def win_min():
+        root.iconify()
+
+    def win_zoom():
+        try:
+            root.zoom()
+        except Exception:
+            try:
+                root.attributes("-zoomed", not root.attributes("-zoomed"))
+            except Exception:
+                pass
+
+    lights.bind("<Button-1>", lambda e: None)
+    # 交通灯点击区域（左/中/右）
+    def on_light(event):
+        x = event.x
+        if x < 24:
+            win_close()
+        elif x < 45:
+            win_min()
+        else:
+            win_zoom()
+    lights.bind("<Button-1>", on_light)
+
     brand = tk.Frame(header, bg=C["panel"])
-    brand.pack(side="left", pady=16)
+    brand.pack(side="left", padx=(14, 0))
     tk.Label(brand, text="分卷压缩包分批解压工具", font=(F, 19, "bold"),
              bg=C["panel"], fg=C["txt"]).pack(anchor="w")
     tk.Label(brand, text="边解压边回收 · 省下一半磁盘空间     " + APP_TITLE.split()[-1],
@@ -1130,19 +1171,20 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
         dlg.resizable(False, False)
         dlg.transient(root)
         dlg.grab_set()
-        dlg.configure(bg=C["bg"])
+        dlg.configure(bg=C["panel"])
         dlg.update_idletasks()
-        w, h = 540, 510
+        w, h = 540, 520
         x = root.winfo_x() + max(0, (root.winfo_width() - w) // 2)
         y = root.winfo_y() + max(0, (root.winfo_height() - h) // 2)
         dlg.geometry(f"{w}x{h}+{x}+{y}")
-        frm = tk.Frame(dlg, bg=C["bg"])
-        frm.pack(fill="both", expand=True, padx=20, pady=18)
-        tk.Label(frm, text="关于", font=(F, 9), bg=C["bg"], fg=C["accent"]).pack(anchor="w")
+        frm = tk.Frame(dlg, bg=C["panel"])
+        frm.pack(fill="both", expand=True, padx=22, pady=20)
+        tk.Label(frm, text="关于", font=(F, 9, "bold"), bg=C["panel"],
+                 fg=C["accent"]).pack(anchor="w")
         tk.Label(frm, text=APP_TITLE, font=(F, 18, "bold"),
-                 bg=C["bg"], fg=C["txt"]).pack(anchor="w", pady=(2, 0))
+                 bg=C["panel"], fg=C["txt"]).pack(anchor="w", pady=(2, 0))
         tk.Label(frm, text=f"{SIGNATURE}  ·  单文件绿色版", foreground=C["muted"],
-                 bg=C["bg"], font=(F, 9)).pack(anchor="w", pady=(4, 14))
+                 bg=C["panel"], font=(F, 9)).pack(anchor="w", pady=(4, 14))
 
         intro = (
             "作用：按顺序解压 RAR / ZIP 分卷压缩包，确认当前分卷数据已写入后，"
@@ -1152,164 +1194,143 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
             "安全：只删同组已处理分卷，绝不误删未处理分卷或解压成品；"
             "分卷损坏、缺失、密码错误或任务停止时不执行删除。"
         )
-        tk.Label(frm, text=intro, wraplength=498, justify="left",
-                 font=(F, 10), bg=C["bg"], fg=C["txt"]).pack(anchor="w")
+        tk.Label(frm, text=intro, wraplength=496, justify="left",
+                 font=(F, 10), bg=C["panel"], fg=C["txt"]).pack(anchor="w")
 
-        tk.Label(frm, text="项目地址", font=(F, 10, "bold"), bg=C["bg"],
+        tk.Label(frm, text="项目地址", font=(F, 10, "bold"), bg=C["panel"],
                  fg=C["txt"]).pack(anchor="w", pady=(16, 5))
-        url_frame = tk.Frame(frm, bg=C["bg"])
+        url_frame = tk.Frame(frm, bg=C["panel"])
         url_frame.pack(fill="x")
         ent_url = tk.Entry(url_frame, font=(MONO, 9), bg=C["panel2"], fg=C["accent"],
-                           bd=0, relief="flat")
+                           bd=0, relief="flat", highlightthickness=1,
+                           highlightbackground=C["line"])
         ent_url.insert(0, PROJECT_URL)
         ent_url.configure(state="readonly")
-        ent_url.pack(side="left", fill="x", expand=True, ipady=6, padx=(0, 8))
+        ent_url.pack(side="left", fill="x", expand=True, ipady=7, padx=(0, 8))
 
         def copy_url() -> None:
             dlg.clipboard_clear()
             dlg.clipboard_append(PROJECT_URL)
             btn_copy.configure(text="已复制 ✓")
 
-        btn_copy = tk.Button(url_frame, text="复制", width=8, command=copy_url,
-                             bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
-                             activeforeground=C["txt"], bd=0, relief="flat",
-                             font=(F, 9), cursor="hand2")
+        btn_copy = ttk.Button(url_frame, text="复制", width=8, command=copy_url, style="Sec.TButton")
         btn_copy.pack(side="left")
 
-        btn_row = tk.Frame(frm, bg=C["bg"])
+        btn_row = tk.Frame(frm, bg=C["panel"])
         btn_row.pack(fill="x", pady=(20, 0))
-        tk.Button(btn_row, text="打开项目主页", width=16,
-                  command=lambda: webbrowser.open(PROJECT_URL),
-                  bg=C["accent"], fg="#ffffff", activebackground=C["accent_hi"],
-                  activeforeground="#ffffff", bd=0, relief="flat",
-                  font=(F, 10, "bold"), cursor="hand2", pady=8).pack(side="left")
-        tk.Button(btn_row, text="关闭", width=10, command=dlg.destroy,
-                  bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
-                  activeforeground=C["txt"], bd=0, relief="flat",
-                  font=(F, 10), cursor="hand2", pady=8).pack(side="right")
+        ttk.Button(btn_row, text="打开项目主页", width=16, style="Pri.TButton",
+                   command=lambda: webbrowser.open(PROJECT_URL)).pack(side="left")
+        ttk.Button(btn_row, text="关闭", width=10, style="Sec.TButton",
+                   command=dlg.destroy).pack(side="right")
 
-    tk.Button(header, text="关于", width=8, command=show_about,
-              bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
-              activeforeground=C["txt"], bd=0, relief="flat",
-              font=(F, 10), cursor="hand2", pady=7).pack(side="right", padx=20)
+    ttk.Button(header, text="关于", width=9, command=show_about,
+               style="Sec.TButton").pack(side="right", padx=20)
 
-    # 滚动内容区
+    # 标题栏下方分隔线
+    tk.Frame(main, bg=C["line"], height=1).pack(fill="x", side="top")
+
+    # 内容区
     content = tk.Frame(main, bg=C["bg"])
-    content.pack(fill="both", expand=True, padx=20, pady=16)
+    content.pack(fill="both", expand=True, padx=22, pady=18)
 
     def card(parent):
         return tk.Frame(parent, bg=C["panel"], highlightbackground=C["line"],
                         highlightthickness=1)
 
     # ---------- 风险提示条 ----------
-    warn = tk.Frame(content, bg="#2a1a17", highlightbackground="#5c2b24",
+    warn = tk.Frame(content, bg="#fff6ec", highlightbackground="#f7d9b4",
                     highlightthickness=1)
     warn.pack(fill="x")
-    tk.Label(warn, text="!", font=(F, 14, "bold"), bg="#5c2b24", fg="#ffb4a8",
-             width=2).pack(side="left", padx=(0, 10), fill="y")
+    badge_warn = tk.Label(warn, text="!", font=(F, 13, "bold"), bg="#f0b257",
+                          fg="#ffffff", width=2)
+    badge_warn.pack(side="left", padx=(10, 10), fill="y")
     warning = (
         "风险提示：自动删除模式下，一旦分卷损坏或缺失，整套文件将报废且无法重来；"
         "删除不可撤销。强烈建议先点【预校验全部分卷】并自行备份重要数据。"
     )
-    tk.Label(warn, text=warning, bg="#2a1a17", fg="#e3a397", font=(F, 9),
+    tk.Label(warn, text=warning, bg="#fff6ec", fg="#9a5b12", font=(F, 9),
              wraplength=1040, justify="left", anchor="w").pack(side="left", fill="x",
-                                                               expand=True, pady=8, padx=(0, 10))
+                                                               expand=True, pady=9, padx=(0, 10))
 
     # ---------- 路径配置卡片 ----------
     cfg = card(content)
-    cfg.pack(fill="x", pady=(14, 0))
+    cfg.pack(fill="x", pady=(16, 0))
     cfg_in = tk.Frame(cfg, bg=C["panel"])
-    cfg_in.pack(fill="both", padx=18, pady=16)
+    cfg_in.pack(fill="both", padx=20, pady=18)
 
-    tk.Label(cfg_in, text="01  选择文件", font=(F, 11, "bold"), bg=C["panel"],
-             fg=C["accent"]).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 12))
+    tk.Label(cfg_in, text="选择文件", font=(F, 13, "bold"), bg=C["panel"],
+             fg=C["txt"]).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 4))
+    tk.Label(cfg_in, text="指定分卷来源与解压去向", font=(F, 9), bg=C["panel"],
+             fg=C["muted"]).grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 14))
 
     tk.Label(cfg_in, text="分卷路径", font=(F, 10), bg=C["panel"],
-             fg=C["muted"]).grid(row=1, column=0, sticky="w")
+             fg=C["txt"]).grid(row=2, column=0, sticky="w")
     var_path = tk.StringVar(value=initial_path or "")
     ent_path = ttk.Entry(cfg_in, textvariable=var_path, font=(F, 10))
-    ent_path.grid(row=1, column=1, columnspan=3, sticky="ew", padx=(12, 0), ipady=3)
+    ent_path.grid(row=2, column=1, columnspan=3, sticky="ew", padx=(14, 0))
     path_btns = tk.Frame(cfg_in, bg=C["panel"])
-    path_btns.grid(row=2, column=1, columnspan=3, sticky="ew", padx=(12, 0), pady=(8, 0))
-    btn_folder = tk.Button(path_btns, text="选择分卷文件夹", width=17,
-                            bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
-                            activeforeground=C["txt"], bd=0, relief="flat",
-                            font=(F, 9), cursor="hand2", pady=5)
+    path_btns.grid(row=3, column=1, columnspan=3, sticky="ew", padx=(14, 0), pady=(10, 0))
+    btn_folder = ttk.Button(path_btns, text="选择分卷文件夹", width=18, style="Sec.TButton")
     btn_folder.pack(side="left", padx=(0, 10))
-    btn_first = tk.Button(path_btns, text="选择第一个分卷", width=17,
-                          bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
-                          activeforeground=C["txt"], bd=0, relief="flat",
-                          font=(F, 9), cursor="hand2", pady=5)
+    btn_first = ttk.Button(path_btns, text="选择第一个分卷", width=18, style="Sec.TButton")
     btn_first.pack(side="left")
 
     tk.Label(cfg_in, text="输出目录", font=(F, 10), bg=C["panel"],
-             fg=C["muted"]).grid(row=3, column=0, sticky="w", pady=(12, 0))
+             fg=C["txt"]).grid(row=4, column=0, sticky="w", pady=(14, 0))
     var_out = tk.StringVar()
     ent_out = ttk.Entry(cfg_in, textvariable=var_out, font=(F, 10))
-    ent_out.grid(row=3, column=1, columnspan=2, sticky="ew", padx=(12, 0), pady=(12, 0), ipady=3)
-    btn_out = tk.Button(cfg_in, text="选择输出目录", width=16,
-                        bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
-                        activeforeground=C["txt"], bd=0, relief="flat",
-                        font=(F, 9), cursor="hand2", pady=5)
-    btn_out.grid(row=3, column=3, sticky="w", padx=(10, 0), pady=(12, 0))
+    ent_out.grid(row=4, column=1, columnspan=2, sticky="ew", padx=(14, 0), pady=(14, 0))
+    btn_out = ttk.Button(cfg_in, text="选择输出目录", width=18, style="Sec.TButton")
+    btn_out.grid(row=4, column=3, sticky="w", padx=(12, 0), pady=(14, 0))
 
     tk.Label(cfg_in, text="解压密码", font=(F, 10), bg=C["panel"],
-             fg=C["muted"]).grid(row=4, column=0, sticky="w", pady=(12, 0))
+             fg=C["txt"]).grid(row=5, column=0, sticky="w", pady=(14, 0))
     var_pwd = tk.StringVar()
     ent_pwd = ttk.Entry(cfg_in, textvariable=var_pwd, show="*", width=22, font=(F, 10))
-    ent_pwd.grid(row=4, column=1, sticky="w", padx=(12, 0), pady=(12, 0), ipady=3)
+    ent_pwd.grid(row=5, column=1, sticky="w", padx=(14, 0), pady=(14, 0))
     var_auto = tk.BooleanVar(value=False)
     chk_auto = ttk.Checkbutton(cfg_in, text="启用自动删除已处理分卷（默认关闭 = 只解压不删）",
                                variable=var_auto)
-    chk_auto.grid(row=4, column=2, columnspan=2, sticky="w", padx=(16, 0), pady=(12, 0))
+    chk_auto.grid(row=5, column=2, columnspan=2, sticky="w", padx=(20, 0), pady=(14, 0))
     cfg_in.columnconfigure(1, weight=1)
     cfg_in.columnconfigure(2, weight=1)
 
     # ---------- 操作卡片 ----------
     ops = card(content)
-    ops.pack(fill="x", pady=(14, 0))
+    ops.pack(fill="x", pady=(16, 0))
     ops_in = tk.Frame(ops, bg=C["panel"])
-    ops_in.pack(fill="both", padx=18, pady=16)
+    ops_in.pack(fill="both", padx=20, pady=(18, 8))
 
-    tk.Label(ops_in, text="02  执行操作", font=(F, 11, "bold"), bg=C["panel"],
-             fg=C["accent"]).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 14))
+    tk.Label(ops_in, text="执行操作", font=(F, 13, "bold"), bg=C["panel"],
+             fg=C["txt"]).grid(row=0, column=0, columnspan=4, sticky="w")
+    tk.Label(ops_in, text="检查完整性，然后开始解压", font=(F, 9), bg=C["panel"],
+             fg=C["muted"]).grid(row=1, column=0, columnspan=4, sticky="w", pady=(2, 14))
 
-    btn_check = tk.Button(ops_in, text="◈  预校验全部分卷", width=19,
-                          bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
-                          activeforeground=C["txt"], bd=0, relief="flat",
-                          font=(F, 10), cursor="hand2", pady=10)
-    btn_check.grid(row=1, column=0, sticky="w")
-    btn_start = tk.Button(ops_in, text="▶  开始解压", width=18,
-                          bg=C["accent"], fg="#ffffff", activebackground=C["accent_hi"],
-                          activeforeground="#ffffff", bd=0, relief="flat",
-                          font=(F, 11, "bold"), cursor="hand2", pady=10)
-    btn_start.grid(row=1, column=1, sticky="w", padx=(12, 0))
-    btn_stop = tk.Button(ops_in, text="■  停止", width=12,
-                          bg=C["panel2"], fg=C["muted"], activebackground=C["line"],
-                          activeforeground=C["txt"], bd=0, relief="flat",
-                          font=(F, 10), cursor="hand2", pady=10, state="disabled")
-    btn_stop.grid(row=1, column=2, sticky="w", padx=(12, 0))
+    btn_check = ttk.Button(ops_in, text="◈  预校验全部分卷", width=20, style="Sec.TButton")
+    btn_check.grid(row=2, column=0, sticky="w")
+    btn_start = ttk.Button(ops_in, text="▶  开始解压", width=18, style="Pri.TButton")
+    btn_start.grid(row=2, column=1, sticky="w", padx=(12, 0))
+    btn_stop = ttk.Button(ops_in, text="■  停止", width=12, style="Sec.TButton", state="disabled")
+    btn_stop.grid(row=2, column=2, sticky="w", padx=(12, 0))
 
-    # 状态徽章 + 右键菜单按钮（右上角）
+    # 状态胶囊 + 右键菜单按钮
     def menu_button_text() -> str:
         st = menu_install_status()
         return {"missing": "安装右键菜单", "ok": "卸载右键菜单", "moved": "修复右键菜单"}[st]
 
-    badge = tk.Frame(ops_in, bg=C["panel2"], padx=2, pady=2)
+    badge = tk.Frame(ops_in, bg=C["panel2"], highlightbackground=C["line"],
+                     highlightthickness=1)
     badge.grid(row=0, column=3, sticky="ne", rowspan=2)
     var_status = tk.StringVar(value="就绪")
     lbl_status = tk.Label(badge, textvariable=var_status, font=(F, 10, "bold"),
-                          bg=C["panel2"], fg=C["green"], padx=12, pady=6)
+                          bg=C["panel2"], fg=C["green"], padx=14, pady=6)
     lbl_status.pack(side="right")
-    btn_menu = tk.Button(badge, text=menu_button_text(), width=15,
-                         bg=C["panel2"], fg=C["muted"], activebackground=C["line"],
-                         activeforeground=C["txt"], bd=0, relief="flat",
-                         font=(F, 9), cursor="hand2", pady=5)
-    btn_menu.pack(side="right", padx=(0, 8))
+    btn_menu = ttk.Button(badge, text=menu_button_text(), width=15, style="Sec.TButton")
+    btn_menu.pack(side="right", padx=(0, 8), pady=4)
 
-    # ---------- 进度条 ----------
-    prog_frame = tk.Frame(ops_in, bg=C["panel"])
-    prog_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(16, 0))
+    # 进度条（独立于网格，撑满卡片宽度）
+    prog_frame = tk.Frame(ops, bg=C["panel"])
+    prog_frame.pack(fill="x", padx=20, pady=(6, 18))
     var_progress = tk.DoubleVar(value=0)
     pb = ttk.Progressbar(prog_frame, variable=var_progress, maximum=100, mode="determinate")
     pb.pack(side="left", fill="x", expand=True)
@@ -1319,26 +1340,26 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
 
     # ---------- 日志卡片 ----------
     log_card = card(content)
-    log_card.pack(fill="both", expand=True, pady=(14, 0))
+    log_card.pack(fill="both", expand=True, pady=(16, 0))
     log_head = tk.Frame(log_card, bg=C["panel"])
-    log_head.pack(fill="x", padx=18, pady=(14, 8))
-    tk.Label(log_head, text="03  运行日志", font=(F, 11, "bold"), bg=C["panel"],
-             fg=C["accent"]).pack(side="left")
+    log_head.pack(fill="x", padx=20, pady=(16, 10))
+    tk.Label(log_head, text="运行日志", font=(F, 13, "bold"), bg=C["panel"],
+             fg=C["txt"]).pack(side="left")
     tk.Label(log_head, text="实时 · 可回溯", font=(F, 9), bg=C["panel"],
              fg=C["muted"]).pack(side="left", padx=(10, 0))
 
-    log_box = scrolledtext.ScrolledText(log_card, height=18, wrap="word",
-                                        font=(MONO, 10), bg=C["bg"], fg=C["txt"],
+    log_box = scrolledtext.ScrolledText(log_card, height=16, wrap="word",
+                                        font=(MONO, 10), bg=C["panel"], fg=C["txt"],
                                         insertbackground=C["txt"], bd=0,
                                         highlightbackground=C["line"],
                                         highlightthickness=1, padx=12, pady=10)
-    log_box.pack(fill="both", expand=True, padx=18, pady=(0, 16))
+    log_box.pack(fill="both", expand=True, padx=20, pady=(0, 18))
     log_box.configure(state="disabled")
     log_box.tag_config("INFO", foreground=C["txt"])
     log_box.tag_config("DBG", foreground=C["muted"])
-    log_box.tag_config("STEP", foreground=C["cyan"])
+    log_box.tag_config("STEP", foreground=C["accent"])
     log_box.tag_config("OK", foreground=C["green"])
-    log_box.tag_config("DEL", foreground="#ff9d8a")
+    log_box.tag_config("DEL", foreground="#c0392b")
     log_box.tag_config("WARN", foreground=C["yellow"])
     log_box.tag_config("ERR", foreground=C["red"])
 
@@ -1407,10 +1428,10 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
         dlg = tk.Toplevel(root)
         dlg.title("选择分卷组")
         dlg.geometry("560x320")
-        dlg.configure(bg=C["bg"])
+        dlg.configure(bg=C["panel"])
         tk.Label(dlg, text="检测到多组分卷，请选择要处理的一组：",
-                 font=(F, 10), bg=C["bg"], fg=C["txt"]).pack(anchor="w", padx=12, pady=10)
-        lb = tk.Listbox(dlg, font=(F, 10), bg=C["panel2"], fg=C["txt"],
+                 font=(F, 10), bg=C["panel"], fg=C["txt"]).pack(anchor="w", padx=12, pady=12)
+        lb = tk.Listbox(dlg, font=(F, 10), bg=C["panel"], fg=C["txt"],
                         selectbackground=C["accent"], selectforeground="#ffffff",
                         bd=0, highlightthickness=1, highlightbackground=C["line"])
         for s in sets:
@@ -1418,10 +1439,7 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
         lb.pack(fill="both", expand=True, padx=12)
         if sets:
             lb.selection_set(0)
-        tk.Button(dlg, text="确定", command=pick, bg=C["accent"], fg="#ffffff",
-                  activebackground=C["accent_hi"], activeforeground="#ffffff",
-                  bd=0, relief="flat", font=(F, 10), cursor="hand2",
-                  padx=20, pady=6).pack(pady=12)
+        ttk.Button(dlg, text="确定", command=pick, style="Pri.TButton").pack(pady=12)
         dlg.wait_window()
         return sets[result["v"]] if "v" in result else sets[0]
 
@@ -1430,11 +1448,11 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
         result = {"ok": False}
         dlg = tk.Toplevel(root)
         dlg.title("二次确认：启用自动删除")
-        dlg.geometry("640x390")
+        dlg.geometry("640x400")
         dlg.resizable(False, False)
         dlg.transient(root)
         dlg.grab_set()
-        dlg.configure(bg=C["bg"])
+        dlg.configure(bg=C["panel"])
         txt = (
             "你已勾选【启用自动删除已处理分卷】。\n\n"
             "• 程序会在确认后续分卷已开始读取、且当前分卷数据已写入输出文件后，删除已处理分卷。\n"
@@ -1443,26 +1461,21 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
             "强烈建议：先点【预校验全部分卷】，并确认已有备份或可以承受数据丢失风险。"
         )
         tk.Label(dlg, text=txt, justify="left", anchor="w", wraplength=600,
-                 font=(F, 10), fg="#e3a397", bg=C["bg"]).pack(padx=18, pady=18, anchor="w")
+                 font=(F, 10), fg="#9a5b12", bg=C["panel"]).pack(padx=20, pady=20, anchor="w")
         var_ack = tk.BooleanVar(value=False)
         btn_ok = {}
         def toggle():
-            btn_ok["b"].configure(state="normal" if var_ack.get() else "disabled",
-                                  bg=C["red"] if var_ack.get() else C["panel2"],
-                                  fg="#ffffff" if var_ack.get() else C["muted"])
-        chk = ttk.Checkbutton(dlg, text="我已知晓风险，确认启用自动删除", variable=var_ack,
-                              command=toggle)
-        chk.pack(anchor="w", padx=18)
-        btns = tk.Frame(dlg, bg=C["bg"])
-        btns.pack(pady=18)
-        btn_ok["b"] = tk.Button(btns, text="确认并开始", state="disabled",
-                                command=lambda: (result.update(ok=True), dlg.destroy()),
-                                bg=C["panel2"], fg=C["muted"], bd=0, relief="flat",
-                                font=(F, 10, "bold"), cursor="hand2", padx=18, pady=7)
+            btn_ok["b"].configure(state="normal" if var_ack.get() else "disabled")
+        ttk.Checkbutton(dlg, text="我已知晓风险，确认启用自动删除", variable=var_ack,
+                        command=toggle).pack(anchor="w", padx=20)
+        btns = tk.Frame(dlg, bg=C["panel"])
+        btns.pack(pady=20)
+        btn_ok["b"] = ttk.Button(btns, text="确认并开始", state="disabled",
+                                 style="Pri.TButton",
+                                 command=lambda: (result.update(ok=True), dlg.destroy()))
         btn_ok["b"].pack(side="left", padx=8)
-        tk.Button(btns, text="取消", command=dlg.destroy, bg=C["panel2"], fg=C["txt"],
-                  activebackground=C["line"], activeforeground=C["txt"], bd=0,
-                  relief="flat", font=(F, 10), cursor="hand2", padx=18, pady=7).pack(side="left", padx=8)
+        ttk.Button(btns, text="取消", command=dlg.destroy,
+                   style="Sec.TButton").pack(side="left", padx=8)
         dlg.wait_window()
         return result["ok"]
 
