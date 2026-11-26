@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-分卷压缩包分批解压工具 v1.9
-===========================
+分卷压缩包分批解压工具 v1.10
+============================
 
 功能：按顺序解压分卷，在确认后续分卷已开始读取、当前分卷数据已写入输出文件后，
       自动删除“上一个已处理完毕”的分卷，避免需要双倍磁盘空间。
@@ -54,7 +54,7 @@ else:
     APP_DIR = BASE_DIR
 TOOLS_DIR = BASE_DIR / "tools"
 AUDIT_DIR = APP_DIR / "logs"
-APP_TITLE = "分卷压缩包分批解压工具 v1.9"
+APP_TITLE = "分卷压缩包分批解压工具 v1.10"
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SIGNATURE = "by东风敬我桂花酒"
 PROJECT_URL = "https://github.com/EastWind06/volume-extract-tool"
@@ -1313,11 +1313,8 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
     btn_stop = ttk.Button(ops_in, text="■  停止", width=12, style="Sec.TButton", state="disabled")
     btn_stop.grid(row=2, column=2, sticky="w", padx=(12, 0))
 
-    # 状态胶囊 + 右键菜单按钮
-    def menu_button_text() -> str:
-        st = menu_install_status()
-        return {"missing": "安装右键菜单", "ok": "卸载右键菜单", "moved": "修复右键菜单"}[st]
-
+    # 状态胶囊（右键菜单默认自带，界面不再提供安装/卸载入口）
+    ops_in.columnconfigure(3, weight=1)
     badge = tk.Frame(ops_in, bg=C["panel2"], highlightbackground=C["line"],
                      highlightthickness=1)
     badge.grid(row=0, column=3, sticky="ne", rowspan=2)
@@ -1325,8 +1322,6 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
     lbl_status = tk.Label(badge, textvariable=var_status, font=(F, 10, "bold"),
                           bg=C["panel2"], fg=C["green"], padx=14, pady=6)
     lbl_status.pack(side="right")
-    btn_menu = ttk.Button(badge, text=menu_button_text(), width=15, style="Sec.TButton")
-    btn_menu.pack(side="right", padx=(0, 8), pady=4)
 
     # 进度条（独立于网格，撑满卡片宽度）
     prog_frame = tk.Frame(ops, bg=C["panel"])
@@ -1572,26 +1567,12 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
     btn_start.configure(command=do_start)
     btn_stop.configure(command=do_stop)
 
-    def on_menu_click():
-        st = menu_install_status()
-        if st == "ok":
-            if not messagebox.askyesno("卸载右键菜单",
-                                       "确定移除资源管理器的右键菜单吗？\n（不影响程序本身，可随时重新安装）"):
-                return
-            ok = uninstall_context_menu(lambda m: emit("INFO", m))
-            if ok:
-                messagebox.showinfo("完成", "右键菜单已卸载。")
-        else:
-            tip = ("检测到右键菜单指向的是其他位置的程序，将更新为当前 exe。" if st == "moved"
-                   else "安装后，右键压缩包或文件夹即可直接用本工具打开，无需预先启动软件。\n\n是否安装？")
-            if st == "missing" and not messagebox.askyesno("安装右键菜单", tip):
-                return
-            ok = install_context_menu(lambda m: emit("INFO", m))
-            if ok:
-                messagebox.showinfo("完成", "右键菜单已安装！\n现在右键压缩包或文件夹，选择【分卷解压 ·】开头的选项即可。")
-        btn_menu.configure(text=menu_button_text())
-
-    btn_menu.configure(command=on_menu_click)
+    # 右键菜单默认自带：exe 启动时静默注册/刷新，确保始终指向当前程序，无需用户选择
+    if FROZEN and os.name == "nt" and menu_install_status() != "ok":
+        try:
+            install_context_menu(lambda m: None)
+        except Exception:
+            pass
 
     emit("INFO", "就绪。RAR 分卷推荐使用 .part1.rar 命名；ZIP 分卷推荐 .zip.001 命名。")
 
