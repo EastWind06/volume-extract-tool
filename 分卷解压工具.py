@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-分卷压缩包分批解压工具 v1.6
+分卷压缩包分批解压工具 v1.7
 ===========================
 
 功能：按顺序解压分卷，在确认后续分卷已开始读取、当前分卷数据已写入输出文件后，
@@ -54,7 +54,7 @@ else:
     APP_DIR = BASE_DIR
 TOOLS_DIR = BASE_DIR / "tools"
 AUDIT_DIR = APP_DIR / "logs"
-APP_TITLE = "分卷压缩包分批解压工具 v1.6"
+APP_TITLE = "分卷压缩包分批解压工具 v1.7"
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SIGNATURE = "by东风敬我桂花酒"
 PROJECT_URL = "https://github.com/EastWind06/volume-extract-tool"
@@ -95,14 +95,16 @@ def prepare_console() -> None:
 MENU_KEY_NAME = "VolumeExtractTool"
 MENU_TITLE = "分卷解压工具"
 
-# 级联子菜单：verb -> (显示文字, 命令行参数模板)
+# 平铺一级菜单：verb -> (显示文字, 命令行参数模板)
+# 不用级联/CommandStore：Win11 新版资源管理器对级联子项点击经常不响应，
+# 顶层 verb 是兼容性最好的写法，菜单项点击后直接执行。
 # {exe} 与 {path} 在注册时替换；%1/%V 由资源管理器传入
 MENU_ITEMS = [
-    ("VE.Open",     "用分卷解压工具打开...",        '--path "{path}"'),
-    ("VE.Here",     "解压到此(E)",                  '--quick here "{path}"'),
-    ("VE.Smart",    "智能解压到此(S)",              '--quick smart "{path}"'),
-    ("VE.Subfolder", "解压到同名文件夹(&T)",        '--quick subfolder "{path}"'),
-    ("VE.Browse",   "解压到其他文件夹(B)...",        '--quick browse "{path}"'),
+    ("VE.Open",     "分卷解压 · 打开...",              '--path "{path}"'),
+    ("VE.Here",     "分卷解压 · 解压到此处",           '--quick here "{path}"'),
+    ("VE.Smart",    "分卷解压 · 智能解压到此处",       '--quick smart "{path}"'),
+    ("VE.Subfolder", "分卷解压 · 解压到同名文件夹",    '--quick subfolder "{path}"'),
+    ("VE.Browse",   "分卷解压 · 解压到其他文件夹...",  '--quick browse "{path}"'),
 ]
 COMMAND_STORE = r"Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell"
 
@@ -148,19 +150,13 @@ def menu_install_status() -> str:
     found = 0
     matched = 0
     for base, _ in MENU_BASES:
-        parent = base + "\\" + MENU_KEY_NAME
-        try:
-            k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, parent)
-            winreg.CloseKey(k)
-            found += 1
-        except OSError:
-            continue
-        # 检查子命令是否指向当前 exe
+        # 平铺菜单：command 直接在 base\\<verb>\\command 下
         try:
             ck = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                                parent + "\\shell\\" + MENU_ITEMS[0][0] + "\\command")
+                                base + "\\" + MENU_ITEMS[0][0] + "\\command")
             val, _ = winreg.QueryValueEx(ck, "")
             winreg.CloseKey(ck)
+            found += 1
             if exe in str(val).lower():
                 matched += 1
         except OSError:
@@ -171,7 +167,7 @@ def menu_install_status() -> str:
 
 
 def install_context_menu(emit=None) -> bool:
-    """用传统嵌套菜单写入当前用户注册表（兼容 Win10/11，无需管理员权限）。"""
+    """把右键菜单写成平铺的一级菜单项（兼容 Win10/11，无需管理员权限）。"""
     say = emit or (lambda m: print(m))
     if os.name != "nt":
         say("右键菜单仅支持 Windows")
@@ -182,35 +178,27 @@ def install_context_menu(emit=None) -> bool:
 
     exe = str(Path(sys.executable).resolve())
     try:
-        # 清理旧版 SubCommands / CommandStore 级联菜单残留
+        # 清理旧版级联菜单残留：CommandStore 全局 verb + 三处级联父键
         for verb, _, _ in MENU_ITEMS:
             _delete_reg_tree(winreg.HKEY_CURRENT_USER, COMMAND_STORE + "\\" + verb)
+        for base, _ in MENU_BASES:
+            _delete_reg_tree(winreg.HKEY_CURRENT_USER, base + "\\" + MENU_KEY_NAME)
+
+        # 平铺一级菜单：每个功能直接写在 shell 下，点击即执行
         for base, param in MENU_BASES:
-            parent = base + "\\" + MENU_KEY_NAME
-            _delete_reg_tree(winreg.HKEY_CURRENT_USER, parent)
-
-            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, parent)
-            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, MENU_TITLE)
-            winreg.SetValueEx(key, "MUIVerb", 0, winreg.REG_SZ, MENU_TITLE)
-            winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, exe)
-            # 静态级联菜单关键：相对 HKEY_CLASSES_ROOT 指向自身，
-            # 让资源管理器把下方 shell 子键渲染为子菜单（系统自带菜单即此写法）
-            hkcr_path = base.replace("Software\\Classes\\", "", 1) + "\\" + MENU_KEY_NAME
-            winreg.SetValueEx(key, "ExtendedSubCommandsKey", 0, winreg.REG_SZ, hkcr_path)
-            winreg.CloseKey(key)
-
             for verb, label, template in MENU_ITEMS:
-                child = parent + "\\shell\\" + verb
-                ck = winreg.CreateKey(winreg.HKEY_CURRENT_USER, child)
-                winreg.SetValueEx(ck, "", 0, winreg.REG_SZ, label)
-                winreg.SetValueEx(ck, "MUIVerb", 0, winreg.REG_SZ, label)
-                winreg.CloseKey(ck)
-                cmd = winreg.CreateKey(winreg.HKEY_CURRENT_USER, child + "\\command")
+                key_path = base + "\\" + verb
+                key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
+                winreg.SetValueEx(key, "", 0, winreg.REG_SZ, label)
+                winreg.SetValueEx(key, "MUIVerb", 0, winreg.REG_SZ, label)
+                winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, exe)
+                winreg.CloseKey(key)
+                cmd = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path + "\\command")
                 winreg.SetValueEx(cmd, "", 0, winreg.REG_SZ,
                                   _verb_command(template, exe, param))
                 winreg.CloseKey(cmd)
         say("右键菜单安装成功：文件、文件夹、文件夹空白处三处均已注册。")
-        say("菜单项：打开 / 解压到此 / 智能解压到此 / 解压到同名文件夹 / 解压到其他文件夹")
+        say("菜单项：打开 / 解压到此处 / 智能解压到此处 / 解压到同名文件夹 / 解压到其他文件夹")
         return True
     except Exception as exc:
         say(f"安装失败：{exc}")
@@ -225,16 +213,20 @@ def uninstall_context_menu(emit=None) -> bool:
         return False
     removed = 0
     for base, _ in MENU_BASES:
-        key = base + "\\" + MENU_KEY_NAME
-        try:
-            winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CURRENT_USER, key))
-        except OSError:
-            continue
-        _delete_reg_tree(winreg.HKEY_CURRENT_USER, key)
-        removed += 1
+        # 旧级联父键
+        _delete_reg_tree(winreg.HKEY_CURRENT_USER, base + "\\" + MENU_KEY_NAME)
+        # 平铺一级菜单项
+        for verb, _, _ in MENU_ITEMS:
+            key = base + "\\" + verb
+            try:
+                winreg.CloseKey(winreg.OpenKey(winreg.HKEY_CURRENT_USER, key))
+                removed += 1
+            except OSError:
+                pass
+            _delete_reg_tree(winreg.HKEY_CURRENT_USER, key)
     for verb, _, _ in MENU_ITEMS:
         _delete_reg_tree(winreg.HKEY_CURRENT_USER, COMMAND_STORE + "\\" + verb)
-    say(f"右键菜单已卸载，移除 {removed} 处主菜单及子命令。")
+    say(f"右键菜单已卸载，移除 {removed} 处菜单项。")
     return True
 
 
