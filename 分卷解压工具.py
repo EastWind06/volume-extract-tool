@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-分卷压缩包分批解压工具 v1.0
+分卷压缩包分批解压工具 v1.3
 ===========================
 
 功能：按顺序解压分卷，在确认后续分卷已开始读取、当前分卷数据已写入输出文件后，
@@ -54,7 +54,7 @@ else:
     APP_DIR = BASE_DIR
 TOOLS_DIR = BASE_DIR / "tools"
 AUDIT_DIR = APP_DIR / "logs"
-APP_TITLE = "分卷压缩包分批解压工具 v1.0"
+APP_TITLE = "分卷压缩包分批解压工具 v1.3"
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SIGNATURE = "by东风敬我桂花酒"
 
@@ -92,18 +92,28 @@ def prepare_console() -> None:
 # ---------------------------------------------------------------------------
 
 MENU_KEY_NAME = "VolumeExtractTool"
-MENU_TITLE = "用分卷解压工具打开"
+MENU_TITLE = "分卷解压工具"
 
-
-def _menu_command(exe: str, param: str = "%1") -> str:
-    return f'"{exe}" --path "{param}"'
-
+# 级联子菜单：verb -> (显示文字, 命令行参数模板)
+# {exe} 与 {path} 在注册时替换；%1/%V 由资源管理器传入
+MENU_ITEMS = [
+    ("VE.Open",     "用分卷解压工具打开...",        '--path "{path}"'),
+    ("VE.Here",     "解压到此(E)",                  '--quick here "{path}"'),
+    ("VE.Smart",    "智能解压到此(S)",              '--quick smart "{path}"'),
+    ("VE.Subfolder", "解压到同名文件夹(&T)",        '--quick subfolder "{path}"'),
+    ("VE.Browse",   "解压到其他文件夹(B)...",        '--quick browse "{path}"'),
+]
+COMMAND_STORE = r"Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell"
 
 MENU_BASES = [
     (r"Software\Classes\*\shell", "%1"),                     # 文件（含分卷压缩包）
     (r"Software\Classes\Directory\shell", "%1"),             # 文件夹
     (r"Software\Classes\Directory\Background\shell", "%V"),  # 文件夹空白处
 ]
+
+
+def _verb_command(template: str, exe: str, param: str) -> str:
+    return f'"{exe}" ' + template.replace("{path}", param)
 
 
 def menu_install_status() -> str:
@@ -115,12 +125,12 @@ def menu_install_status() -> str:
     matched = 0
     for base, _ in MENU_BASES:
         try:
-            cmd = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                                 base + "\\" + MENU_KEY_NAME + "\\command")
-            value = winreg.QueryValueEx(cmd, "")[0]
-            winreg.CloseKey(cmd)
+            k = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                               base + "\\" + MENU_KEY_NAME)
+            val, _ = winreg.QueryValueEx(k, "SubCommands")
+            winreg.CloseKey(k)
             found += 1
-            if exe in str(value).lower():
+            if str(val):
                 matched += 1
         except FileNotFoundError:
             pass
@@ -132,7 +142,7 @@ def menu_install_status() -> str:
 
 
 def install_context_menu(emit=None) -> bool:
-    """把右键菜单写入当前用户注册表（无需管理员权限）。emit 为可选日志回调。"""
+    """把级联右键菜单写入当前用户注册表（无需管理员权限）。"""
     say = emit or (lambda m: print(m))
     if os.name != "nt":
         say("右键菜单仅支持 Windows")
@@ -143,18 +153,33 @@ def install_context_menu(emit=None) -> bool:
 
     exe = str(Path(sys.executable).resolve())
     try:
+        # 1) 先在 CommandStore 注册每个子命令
+        for verb, label, template in MENU_ITEMS:
+            store_key = COMMAND_STORE + "\\" + verb
+            k = winreg.CreateKey(winreg.HKEY_CURRENT_USER, store_key)
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, label)
+            winreg.SetValueEx(k, "Icon", 0, winreg.REG_SZ, exe)
+            winreg.CloseKey(k)
+            # 子命令的 command 里放占位符；实际路径参数通过下面的 per-shell 键覆盖
+            cmd = winreg.CreateKey(winreg.HKEY_CURRENT_USER, store_key + "\\command")
+            winreg.SetValueEx(cmd, "", 0, winreg.REG_SZ, _verb_command(template, exe, "%1"))
+            winreg.CloseKey(cmd)
+
+        # 2) 三处主菜单用 SubCommands 引用子命令
+        verbs = ";".join(v for v, _, _ in MENU_ITEMS)
         for base, param in MENU_BASES:
             key_path = base + "\\" + MENU_KEY_NAME
             key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, MENU_TITLE)
             winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, exe)
-            cmd = winreg.CreateKey(key, "command")
-            winreg.SetValueEx(cmd, "", 0, winreg.REG_SZ, _menu_command(exe, param))
-            winreg.CloseKey(cmd)
+            winreg.SetValueEx(key, "SubCommands", 0, winreg.REG_SZ, verbs)
+            try:
+                winreg.DeleteKey(key, "command")  # 清理旧版单层菜单残留
+            except Exception:
+                pass
             winreg.CloseKey(key)
-        say("右键菜单安装成功，已注册：文件、文件夹、文件夹空白处三处。")
-        say(f"程序路径：{exe}")
-        say("现在右键压缩包或文件夹，即可看到【用分卷解压工具打开】。")
+        say("右键级联菜单安装成功，已注册：文件、文件夹、文件夹空白处三处。")
+        say("菜单项：打开 / 解压到此 / 智能解压到此 / 解压到同名文件夹 / 解压到其他文件夹")
         return True
     except Exception as exc:
         say(f"安装失败：{exc}")
@@ -169,17 +194,29 @@ def uninstall_context_menu(emit=None) -> bool:
         return False
     removed = 0
     for base, _ in MENU_BASES:
+        key = base + "\\" + MENU_KEY_NAME
         try:
-            winreg.DeleteKey(winreg.HKEY_CURRENT_USER,
-                             base + "\\" + MENU_KEY_NAME + "\\command")
-            winreg.DeleteKey(winreg.HKEY_CURRENT_USER,
-                             base + "\\" + MENU_KEY_NAME)
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key + "\\command")
+        except Exception:
+            pass
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
             removed += 1
         except FileNotFoundError:
             pass
         except Exception as exc:
-            say(f"清理失败 {base}: {exc}")
-    say(f"右键菜单已卸载，移除 {removed} 处。")
+            say(f"清理失败 {key}: {exc}")
+    for verb, _, _ in MENU_ITEMS:
+        store_key = COMMAND_STORE + "\\" + verb
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, store_key + "\\command")
+        except Exception:
+            pass
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, store_key)
+        except Exception:
+            pass
+    say(f"右键菜单已卸载，移除 {removed} 处主菜单及子命令。")
     return True
 
 
@@ -889,9 +926,42 @@ def zip_extract(vset: VolumeSet, dest: Path, ctx: TaskContext, dm: DeletionManag
 # 统一任务入口（GUI 与 CLI 共用）
 # ---------------------------------------------------------------------------
 
+def flatten_single_dir(dest: Path, ctx: TaskContext) -> bool:
+    """智能解压：输出目录内若只有一个子目录（且无散落文件），把子目录内容上移一层。"""
+    try:
+        entries = [p for p in dest.iterdir()]
+        dirs = [p for p in entries if p.is_dir()]
+        files = [p for p in entries if not p.is_dir()]
+        if len(dirs) != 1 or files:
+            ctx.log("智能解压：顶层结构已是扁平或多个条目，无需剥离", "INFO")
+            return True
+        only = dirs[0]
+        inner = list(only.iterdir())
+        ctx.log(f"智能解压：检测到唯一顶层文件夹「{only.name}」，正在上移其 {len(inner)} 个条目", "STEP")
+        moved = 0
+        conflicts = 0
+        for item in inner:
+            target = dest / item.name
+            if target.exists():
+                conflicts += 1
+                ctx.log(f"智能解压：目标已存在，跳过「{item.name}」", "WARN")
+                continue
+            shutil.move(str(item), str(target))
+            moved += 1
+        if not any(only.iterdir()):
+            only.rmdir()
+        ctx.log(f"智能解压完成：上移 {moved} 个条目，跳过 {conflicts} 个冲突"
+                + ("（外壳文件夹已保留）" if conflicts else "（已去掉外壳文件夹）"), "OK")
+        return True
+    except Exception as exc:
+        ctx.log(f"智能解压失败：{exc}", "ERR")
+        return False
+
+
 def run_task(path_input, output_dir, auto_delete: bool, password: str,
              precheck_only: bool, ctx: TaskContext,
-             chooser: Optional[Callable] = None) -> bool:
+             chooser: Optional[Callable] = None,
+             smart_flatten: bool = False) -> bool:
     vset = detect_volume_set(path_input, chooser)
     ctx.log(f"识别到分卷组：{vset.base}，类型 {vset.kind.upper()}，"
             f"共 {vset.count} 卷（{vset.label(0)} … {vset.label(vset.count - 1)}）", "STEP")
@@ -912,9 +982,10 @@ def run_task(path_input, output_dir, auto_delete: bool, password: str,
         return zip_precheck(vset, ctx)
 
     dest = Path(output_dir).expanduser().resolve()
-    if dest == vset.folder.resolve():
-        ctx.log("输出目录不能与分卷目录相同（防止误删成品），已自动改为其子目录", "WARN")
-        dest = dest / (vset.base + "_解压结果")
+    allow_same = (dest == vset.folder.resolve())
+    if allow_same:
+        ctx.log("输出目录与分卷目录相同，已切换为安全模式：只解压不删文件（避免误删分卷）", "WARN")
+        auto_delete = False
     dest.mkdir(parents=True, exist_ok=True)
 
     dm = DeletionManager(auto_delete, vset, ctx, dest)
@@ -922,9 +993,17 @@ def run_task(path_input, output_dir, auto_delete: bool, password: str,
         ctx.log("安全模式：【只解压不删文件】，不会删除任何分卷", "OK")
 
     if vset.kind == "rar":
-        return rar_extract(vset, dest, password, ctx, unrar, dm)
-    if vset.kind == "zip":
-        return zip_extract(vset, dest, ctx, dm)
+        ok = rar_extract(vset, dest, password, ctx, unrar, dm)
+    elif vset.kind == "zip":
+        ok = zip_extract(vset, dest, ctx, dm)
+    else:
+        ctx.log(f"暂不支持的分卷类型：{vset.kind}。RAR 请使用 .partN.rar，ZIP 请使用 .zip.001", "ERR")
+        return False
+
+    # 智能解压：若解压结果只有一个顶层文件夹，把它内部内容上移一层，去掉多余外壳
+    if ok and smart_flatten:
+        ok = flatten_single_dir(dest, ctx)
+    return ok
 
     ctx.log(f"暂不支持的分卷类型：{vset.kind}。RAR 请使用 .partN.rar，ZIP 请使用 .zip.001", "ERR")
     return False
@@ -934,7 +1013,7 @@ def run_task(path_input, output_dir, auto_delete: bool, password: str,
 # 图形界面
 # ---------------------------------------------------------------------------
 
-def build_gui(initial_path: str = ""):
+def build_gui(initial_path: str = "", quick_mode: str = ""):
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox, scrolledtext
 
@@ -1200,7 +1279,7 @@ def build_gui(initial_path: str = ""):
     btn_first.configure(command=choose_first)
     btn_out.configure(command=choose_out)
 
-    def start_worker(precheck: bool) -> None:
+    def start_worker(precheck: bool, smart: bool = False) -> None:
         path_input = var_path.get().strip()
         output = var_out.get().strip()
         if not path_input:
@@ -1224,7 +1303,8 @@ def build_gui(initial_path: str = ""):
 
         def work():
             try:
-                ok = run_task(path_input, output, auto, pwd, precheck, ctx, log_choice)
+                ok = run_task(path_input, output, auto, pwd, precheck, ctx, log_choice,
+                              smart_flatten=smart)
                 q.put(("__done__", ok))
             except StopRequested:
                 q.put(("__done__", None))
@@ -1253,6 +1333,49 @@ def build_gui(initial_path: str = ""):
     btn_stop.configure(command=do_stop)
 
     emit("INFO", "就绪。RAR 分卷推荐使用 .part1.rar 命名；ZIP 分卷推荐 .zip.001 命名。")
+
+    # 右键快捷模式：启动时自动填好路径/输出目录并开始解压（默认只解压不删，安全）
+    if quick_mode:
+        def apply_quick():
+            p = initial_path.strip()
+            if not p:
+                return
+            var_path.set(p)
+            is_dir = os.path.isdir(p)
+            parent = p if is_dir else os.path.dirname(p)
+            if quick_mode == "here":
+                out = parent
+                smart = False
+            elif quick_mode == "smart":
+                out = parent
+                smart = True
+            elif quick_mode == "subfolder":
+                base = os.path.basename(p.rstrip("\\/"))
+                if not is_dir:
+                    # 去掉分卷后缀，取归档基名
+                    for pat in (r"\.part\d+\.[^.]+$", r"\.(zip|rar)\.\d+$", r"\.\d+$", r"\.r\d{2}$", r"\.z\d{2}$"):
+                        base = re.sub(pat, "", base, flags=re.I)
+                        if base != os.path.basename(p.rstrip("\\/")):
+                            break
+                    if base.lower().endswith(".zip") or base.lower().endswith(".rar"):
+                        base = os.path.splitext(base)[0]
+                out = os.path.join(parent, base)
+                smart = False
+            elif quick_mode == "browse":
+                chosen = filedialog.askdirectory(parent=root, title="选择解压到的目标文件夹")
+                if not chosen:
+                    emit("WARN", "已取消选择目标文件夹，未开始解压")
+                    return
+                out = chosen
+                smart = False
+            else:
+                out = os.path.join(parent, "解压结果")
+                smart = False
+            var_out.set(out)
+            emit("STEP", f"右键快捷解压（{quick_mode}）：{p} → {out}")
+            start_worker(False, smart=smart)
+        root.after(300, apply_quick)
+
     return root
 
 
@@ -1269,6 +1392,7 @@ def cli_main(argv: List[str]) -> int:
     ap.add_argument("--auto-delete", action="store_true", help="启用自动删除已处理分卷（默认关闭）")
     ap.add_argument("--password", default="", help="解压密码")
     ap.add_argument("--log", default="", help="把日志同时写入文件（便于自动化测试和留档）")
+    ap.add_argument("--smart", action="store_true", help="智能解压：剥掉唯一顶层文件夹")
     args = ap.parse_args(argv)
 
     log_fp = None
@@ -1290,7 +1414,8 @@ def cli_main(argv: List[str]) -> int:
         try:
             ctx = TaskContext(emit, threading.Event())
             ok = run_task(args.volume, args.output or str(Path(args.volume).parent / "解压结果"),
-                          args.auto_delete, args.password, args.precheck, ctx)
+                          args.auto_delete, args.password, args.precheck, ctx,
+                          smart_flatten=args.smart)
             return 0 if ok else 2
         except Exception as exc:
             emit("ERR", f"致命错误：{exc}")
@@ -1311,11 +1436,17 @@ def main() -> int:
         if "--cli" in argv:
             return cli_main([a for a in argv if a != "--cli"])
         initial_path = ""
+        quick_mode = ""
         if "--path" in argv:
             i = argv.index("--path")
             if i + 1 < len(argv):
                 initial_path = argv[i + 1]
-        build_gui(initial_path).mainloop()
+        if "--quick" in argv:
+            i = argv.index("--quick")
+            if i + 2 < len(argv):
+                quick_mode = argv[i + 1]
+                initial_path = argv[i + 2]
+        build_gui(initial_path, quick_mode).mainloop()
         return 0
     except Exception as exc:
         # 防止无控制台 exe 弹出 PyInstaller 错误框并卡死
