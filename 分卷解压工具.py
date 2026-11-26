@@ -17,6 +17,11 @@
 
 命令行模式（便于批处理/测试）：
   python 分卷解压工具.py --cli <第一分卷或目录> --output <输出目录> [--precheck] [--auto-delete] [--password 密码]
+
+右键菜单集成：
+  分卷解压工具.exe --install-menu     注册资源管理器右键菜单（当前用户，无需管理员）
+  分卷解压工具.exe --uninstall-menu   卸载右键菜单
+  右键菜单内部调用：分卷解压工具.exe --path "<选中的路径>"
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ import threading
 import time
 import traceback
 import zipfile
+import winreg
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -55,7 +61,7 @@ SIGNATURE = "by东风敬我桂花酒"
 
 def prepare_console() -> None:
     """GUI 版 exe 不带控制台；命令行模式需要时再申请一个，避免启动黑框。"""
-    is_cli = "--cli" in sys.argv
+    is_cli = any(a in sys.argv for a in ("--cli", "--install-menu", "--uninstall-menu"))
     if os.name == "nt" and is_cli:
         try:
             import ctypes
@@ -79,6 +85,81 @@ def prepare_console() -> None:
     for name in ("stdout", "stderr"):
         if getattr(sys, name, None) is None:
             setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+
+
+# ---------------------------------------------------------------------------
+# 资源管理器右键菜单集成（安装/卸载）
+# ---------------------------------------------------------------------------
+
+MENU_KEY_NAME = "VolumeExtractTool"
+MENU_TITLE = "用分卷解压工具打开"
+
+
+def _menu_command(exe: str, param: str = "%1") -> str:
+    return f'"{exe}" --path "{param}"'
+
+
+def install_context_menu() -> int:
+    """把右键菜单写入当前用户注册表（无需管理员权限）。"""
+    if os.name != "nt":
+        print("右键菜单仅支持 Windows")
+        return 1
+    if not FROZEN:
+        print("请直接用【分卷解压工具.exe --install-menu】安装，源码模式注册的会是 Python 解释器。")
+        return 1
+
+    exe = str(Path(sys.executable).resolve())
+    targets = [
+        (r"Software\Classes\*\shell", "%1"),                     # 文件（含分卷压缩包）
+        (r"Software\Classes\Directory\shell", "%1"),             # 文件夹
+        (r"Software\Classes\Directory\Background\shell", "%V"),  # 文件夹空白处
+    ]
+    done = []
+    try:
+        for base, param in targets:
+            key_path = base + "\\" + MENU_KEY_NAME
+            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, MENU_TITLE)
+            winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, exe)
+            cmd = winreg.CreateKey(key, "command")
+            winreg.SetValueEx(cmd, "", 0, winreg.REG_SZ, _menu_command(exe, param))
+            winreg.CloseKey(cmd)
+            winreg.CloseKey(key)
+            done.append(key_path)
+        print("右键菜单安装成功，已注册位置：")
+        for d in done:
+            print("  - HKCU\\" + d)
+        print(f"命令：{_menu_command(exe)}")
+        return 0
+    except Exception as exc:
+        print(f"安装失败：{exc}")
+        return 1
+
+
+def uninstall_context_menu() -> int:
+    """移除右键菜单条目，不影响程序本身。"""
+    if os.name != "nt":
+        print("右键菜单仅支持 Windows")
+        return 1
+    bases = [
+        r"Software\Classes\*\shell",
+        r"Software\Classes\Directory\shell",
+        r"Software\Classes\Directory\Background\shell",
+    ]
+    removed = 0
+    for base in bases:
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER,
+                             base + "\\" + MENU_KEY_NAME + "\\command")
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER,
+                             base + "\\" + MENU_KEY_NAME)
+            removed += 1
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            print(f"清理失败 {base}: {exc}")
+    print(f"右键菜单已卸载，移除 {removed} 处。")
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -832,7 +913,7 @@ def run_task(path_input, output_dir, auto_delete: bool, password: str,
 # 图形界面
 # ---------------------------------------------------------------------------
 
-def build_gui():
+def build_gui(initial_path: str = ""):
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox, scrolledtext
 
@@ -869,7 +950,7 @@ def build_gui():
 
     # ---------- 输入区 ----------
     ttk.Label(main, text="分卷路径：").grid(row=2, column=0, sticky="w")
-    var_path = tk.StringVar()
+    var_path = tk.StringVar(value=initial_path or "")
     ent_path = ttk.Entry(main, textvariable=var_path, width=88)
     ent_path.grid(row=2, column=1, columnspan=2, sticky="ew", padx=(4, 4))
     path_btns = ttk.Frame(main)
@@ -1172,10 +1253,19 @@ def cli_main(argv: List[str]) -> int:
 def main() -> int:
     prepare_console()
     try:
-        if "--cli" in sys.argv:
-            argv = [a for a in sys.argv[1:] if a != "--cli"]
-            return cli_main(argv)
-        build_gui().mainloop()
+        argv = sys.argv[1:]
+        if "--install-menu" in argv:
+            return install_context_menu()
+        if "--uninstall-menu" in argv:
+            return uninstall_context_menu()
+        if "--cli" in argv:
+            return cli_main([a for a in argv if a != "--cli"])
+        initial_path = ""
+        if "--path" in argv:
+            i = argv.index("--path")
+            if i + 1 < len(argv):
+                initial_path = argv[i + 1]
+        build_gui(initial_path).mainloop()
         return 0
     except Exception as exc:
         # 防止无控制台 exe 弹出 PyInstaller 错误框并卡死

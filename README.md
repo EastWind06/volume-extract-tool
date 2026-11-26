@@ -15,6 +15,14 @@
 
 `xxx.part1.rar` / `xxx.part01.rar` / `xxx.rar.001` / `xxx.r00 + xxx.rar` / `xxx.zip.001` / `xxx.001` / `xxx.z01 + xxx.zip`
 
+## 资源管理器右键菜单（无需预先启动软件）
+
+安装后，在压缩包分卷文件或分卷文件夹上右键，即可看到 **用分卷解压工具打开**，点击后软件自动启动并填入选中路径。
+
+- 安装：命令行执行 `分卷解压工具.exe --install-menu`
+- 卸载：命令行执行 `分卷解压工具.exe --uninstall-menu`
+- 写入当前用户注册表，无需管理员权限；支持文件、文件夹、文件夹空白处三种右键
+
 ## 下载与使用
 
 从 [Releases](https://github.com/EastWind06/volume-extract-tool/releases/tag/v1.0) 下载 `volume-extract-tool-v1.0.exe`，双击运行即可。
