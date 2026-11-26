@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-分卷压缩包分批解压工具 v1.7
+分卷压缩包分批解压工具 v1.8
 ===========================
 
 功能：按顺序解压分卷，在确认后续分卷已开始读取、当前分卷数据已写入输出文件后，
@@ -54,7 +54,7 @@ else:
     APP_DIR = BASE_DIR
 TOOLS_DIR = BASE_DIR / "tools"
 AUDIT_DIR = APP_DIR / "logs"
-APP_TITLE = "分卷压缩包分批解压工具 v1.7"
+APP_TITLE = "分卷压缩包分批解压工具 v1.8"
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 SIGNATURE = "by东风敬我桂花酒"
 PROJECT_URL = "https://github.com/EastWind06/volume-extract-tool"
@@ -1054,49 +1054,95 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox, scrolledtext
 
+    # ============ 视觉主题（深色现代卡片风） ============
+    C = {
+        "bg":        "#0f1216",   # 窗口底色
+        "panel":     "#181d24",   # 卡片
+        "panel2":    "#1f252e",   # 卡片内衬
+        "line":      "#2a323d",   # 描边
+        "txt":       "#e6edf3",   # 主文字
+        "muted":     "#8b98a9",   # 次文字
+        "accent":    "#4c8dff",   # 主色（蓝）
+        "accent_hi": "#6aa2ff",
+        "green":     "#3fb950",
+        "yellow":    "#d29922",
+        "red":       "#f85149",
+        "cyan":      "#39c5cf",
+    }
+    F = "Microsoft YaHei UI"
+    MONO = "Consolas"
+
     root = tk.Tk()
     root.title(APP_TITLE)
-    root.geometry("1080x760")
-    root.minsize(940, 620)
+    root.geometry("1160x820")
+    root.minsize(1000, 680)
+    root.configure(bg=C["bg"])
+    try:
+        root.iconbitmap(default="")
+    except Exception:
+        pass
 
     q: queue.Queue = queue.Queue()
     stop_event = threading.Event()
     worker: dict = {"thread": None}
 
-    # ---------- 样式 ----------
+    # ---------- ttk 样式 ----------
     style = ttk.Style()
     try:
         style.theme_use("clam")
     except Exception:
         pass
+    style.configure("TEntry", fieldbackground=C["panel2"], foreground=C["txt"],
+                    insertcolor=C["txt"], borderwidth=0, padding=6)
+    style.configure("TCheckbutton", background=C["panel"], foreground=C["txt"],
+                    font=(F, 10))
+    style.map("TCheckbutton", background=[("active", C["panel"])],
+              foreground=[("active", C["txt"])])
+    style.configure("TProgressbar", troughcolor=C["panel2"],
+                    background=C["accent"], borderwidth=0, thickness=12)
+    style.configure("TScrollbar", background=C["line"], troughcolor=C["panel"],
+                    borderwidth=0, arrowcolor=C["muted"])
 
-    main = ttk.Frame(root, padding=12)
+    # ============ 主容器 ============
+    main = tk.Frame(root, bg=C["bg"])
     main.pack(fill="both", expand=True)
 
-    title = ttk.Label(main, text=APP_TITLE, font=("Microsoft YaHei UI", 16, "bold"))
-    title.grid(row=0, column=0, columnspan=3, sticky="w")
+    # ---------- 顶部品牌栏 ----------
+    header = tk.Frame(main, bg=C["panel"], height=88)
+    header.pack(fill="x", side="top")
+    header.pack_propagate(False)
+    accent_bar = tk.Frame(header, bg=C["accent"], width=6)
+    accent_bar.pack(side="left", fill="y")
+    tk.Label(header, text="▦", font=(F, 30, "bold"), bg=C["panel"],
+             fg=C["accent"]).pack(side="left", padx=(18, 12))
+    brand = tk.Frame(header, bg=C["panel"])
+    brand.pack(side="left", pady=16)
+    tk.Label(brand, text="分卷压缩包分批解压工具", font=(F, 19, "bold"),
+             bg=C["panel"], fg=C["txt"]).pack(anchor="w")
+    tk.Label(brand, text="边解压边回收 · 省下一半磁盘空间     " + APP_TITLE.split()[-1],
+             font=(F, 9), bg=C["panel"], fg=C["muted"]).pack(anchor="w", pady=(3, 0))
 
     def show_about() -> None:
         """弹出关于窗口：软件作用、主要功能、项目地址与署名。"""
         import webbrowser
-
         dlg = tk.Toplevel(root)
         dlg.title("关于")
         dlg.resizable(False, False)
         dlg.transient(root)
         dlg.grab_set()
+        dlg.configure(bg=C["bg"])
         dlg.update_idletasks()
-        w, h = 520, 500
+        w, h = 540, 510
         x = root.winfo_x() + max(0, (root.winfo_width() - w) // 2)
         y = root.winfo_y() + max(0, (root.winfo_height() - h) // 2)
         dlg.geometry(f"{w}x{h}+{x}+{y}")
-
-        frm = ttk.Frame(dlg, padding=18)
-        frm.pack(fill="both", expand=True)
-        ttk.Label(frm, text=APP_TITLE,
-                  font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w")
-        ttk.Label(frm, text=f"{SIGNATURE}  ·  单文件绿色版", foreground="#666666",
-                  font=("Microsoft YaHei UI", 9)).pack(anchor="w", pady=(2, 12))
+        frm = tk.Frame(dlg, bg=C["bg"])
+        frm.pack(fill="both", expand=True, padx=20, pady=18)
+        tk.Label(frm, text="关于", font=(F, 9), bg=C["bg"], fg=C["accent"]).pack(anchor="w")
+        tk.Label(frm, text=APP_TITLE, font=(F, 18, "bold"),
+                 bg=C["bg"], fg=C["txt"]).pack(anchor="w", pady=(2, 0))
+        tk.Label(frm, text=f"{SIGNATURE}  ·  单文件绿色版", foreground=C["muted"],
+                 bg=C["bg"], font=(F, 9)).pack(anchor="w", pady=(4, 14))
 
         intro = (
             "作用：按顺序解压 RAR / ZIP 分卷压缩包，确认当前分卷数据已写入后，"
@@ -1106,149 +1152,210 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
             "安全：只删同组已处理分卷，绝不误删未处理分卷或解压成品；"
             "分卷损坏、缺失、密码错误或任务停止时不执行删除。"
         )
-        ttk.Label(frm, text=intro, wraplength=484, justify="left",
-                  font=("Microsoft YaHei UI", 10)).pack(anchor="w")
+        tk.Label(frm, text=intro, wraplength=498, justify="left",
+                 font=(F, 10), bg=C["bg"], fg=C["txt"]).pack(anchor="w")
 
-        ttk.Label(frm, text="项目地址：",
-                  font=("Microsoft YaHei UI", 10, "bold")).pack(anchor="w", pady=(14, 4))
-        url_frame = ttk.Frame(frm)
+        tk.Label(frm, text="项目地址", font=(F, 10, "bold"), bg=C["bg"],
+                 fg=C["txt"]).pack(anchor="w", pady=(16, 5))
+        url_frame = tk.Frame(frm, bg=C["bg"])
         url_frame.pack(fill="x")
-        ent_url = ttk.Entry(url_frame, font=("Consolas", 9))
+        ent_url = tk.Entry(url_frame, font=(MONO, 9), bg=C["panel2"], fg=C["accent"],
+                           bd=0, relief="flat")
         ent_url.insert(0, PROJECT_URL)
         ent_url.configure(state="readonly")
-        ent_url.pack(side="left", fill="x", expand=True)
+        ent_url.pack(side="left", fill="x", expand=True, ipady=6, padx=(0, 8))
 
         def copy_url() -> None:
             dlg.clipboard_clear()
             dlg.clipboard_append(PROJECT_URL)
-            btn_copy.configure(text="已复制")
+            btn_copy.configure(text="已复制 ✓")
 
-        btn_copy = ttk.Button(url_frame, text="复制", width=7, command=copy_url)
-        btn_copy.pack(side="left", padx=(6, 0))
+        btn_copy = tk.Button(url_frame, text="复制", width=8, command=copy_url,
+                             bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
+                             activeforeground=C["txt"], bd=0, relief="flat",
+                             font=(F, 9), cursor="hand2")
+        btn_copy.pack(side="left")
 
-        btn_row = ttk.Frame(frm)
-        btn_row.pack(fill="x", pady=(16, 0))
-        ttk.Button(btn_row, text="打开项目主页", width=16,
-                   command=lambda: webbrowser.open(PROJECT_URL)).pack(side="left")
-        ttk.Button(btn_row, text="关闭", width=10,
-                   command=dlg.destroy).pack(side="right")
+        btn_row = tk.Frame(frm, bg=C["bg"])
+        btn_row.pack(fill="x", pady=(20, 0))
+        tk.Button(btn_row, text="打开项目主页", width=16,
+                  command=lambda: webbrowser.open(PROJECT_URL),
+                  bg=C["accent"], fg="#ffffff", activebackground=C["accent_hi"],
+                  activeforeground="#ffffff", bd=0, relief="flat",
+                  font=(F, 10, "bold"), cursor="hand2", pady=8).pack(side="left")
+        tk.Button(btn_row, text="关闭", width=10, command=dlg.destroy,
+                  bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
+                  activeforeground=C["txt"], bd=0, relief="flat",
+                  font=(F, 10), cursor="hand2", pady=8).pack(side="right")
 
-    btn_about = ttk.Button(main, text="关于", width=8, command=show_about)
-    btn_about.grid(row=0, column=3, sticky="e")
+    tk.Button(header, text="关于", width=8, command=show_about,
+              bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
+              activeforeground=C["txt"], bd=0, relief="flat",
+              font=(F, 10), cursor="hand2", pady=7).pack(side="right", padx=20)
 
+    # 滚动内容区
+    content = tk.Frame(main, bg=C["bg"])
+    content.pack(fill="both", expand=True, padx=20, pady=16)
+
+    def card(parent):
+        return tk.Frame(parent, bg=C["panel"], highlightbackground=C["line"],
+                        highlightthickness=1)
+
+    # ---------- 风险提示条 ----------
+    warn = tk.Frame(content, bg="#2a1a17", highlightbackground="#5c2b24",
+                    highlightthickness=1)
+    warn.pack(fill="x")
+    tk.Label(warn, text="!", font=(F, 14, "bold"), bg="#5c2b24", fg="#ffb4a8",
+             width=2).pack(side="left", padx=(0, 10), fill="y")
     warning = (
         "风险提示：自动删除模式下，一旦分卷损坏或缺失，整套文件将报废且无法重来；"
         "删除不可撤销。强烈建议先点【预校验全部分卷】并自行备份重要数据。"
     )
-    warn_lbl = tk.Label(main, text=warning, fg="#a1260d", bg="#fff2e8",
-                        font=("Microsoft YaHei UI", 10),
-                        wraplength=1030, justify="left", padx=8, pady=6, anchor="w")
-    warn_lbl.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(6, 10))
+    tk.Label(warn, text=warning, bg="#2a1a17", fg="#e3a397", font=(F, 9),
+             wraplength=1040, justify="left", anchor="w").pack(side="left", fill="x",
+                                                               expand=True, pady=8, padx=(0, 10))
 
-    # ---------- 输入区 ----------
-    ttk.Label(main, text="分卷路径：").grid(row=2, column=0, sticky="w")
+    # ---------- 路径配置卡片 ----------
+    cfg = card(content)
+    cfg.pack(fill="x", pady=(14, 0))
+    cfg_in = tk.Frame(cfg, bg=C["panel"])
+    cfg_in.pack(fill="both", padx=18, pady=16)
+
+    tk.Label(cfg_in, text="01  选择文件", font=(F, 11, "bold"), bg=C["panel"],
+             fg=C["accent"]).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 12))
+
+    tk.Label(cfg_in, text="分卷路径", font=(F, 10), bg=C["panel"],
+             fg=C["muted"]).grid(row=1, column=0, sticky="w")
     var_path = tk.StringVar(value=initial_path or "")
-    ent_path = ttk.Entry(main, textvariable=var_path, width=88)
-    ent_path.grid(row=2, column=1, columnspan=2, sticky="ew", padx=(4, 4))
-    path_btns = ttk.Frame(main)
-    path_btns.grid(row=2, column=3, sticky="e")
-    btn_folder = ttk.Button(path_btns, text="选择分卷文件夹", width=15)
-    btn_folder.pack(side="left", padx=(0, 4))
-    btn_first = ttk.Button(path_btns, text="选择第一个分卷", width=15)
+    ent_path = ttk.Entry(cfg_in, textvariable=var_path, font=(F, 10))
+    ent_path.grid(row=1, column=1, columnspan=3, sticky="ew", padx=(12, 0), ipady=3)
+    path_btns = tk.Frame(cfg_in, bg=C["panel"])
+    path_btns.grid(row=2, column=1, columnspan=3, sticky="ew", padx=(12, 0), pady=(8, 0))
+    btn_folder = tk.Button(path_btns, text="选择分卷文件夹", width=17,
+                            bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
+                            activeforeground=C["txt"], bd=0, relief="flat",
+                            font=(F, 9), cursor="hand2", pady=5)
+    btn_folder.pack(side="left", padx=(0, 10))
+    btn_first = tk.Button(path_btns, text="选择第一个分卷", width=17,
+                          bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
+                          activeforeground=C["txt"], bd=0, relief="flat",
+                          font=(F, 9), cursor="hand2", pady=5)
     btn_first.pack(side="left")
 
-    ttk.Label(main, text="输出目录：").grid(row=3, column=0, sticky="w", pady=(4, 0))
+    tk.Label(cfg_in, text="输出目录", font=(F, 10), bg=C["panel"],
+             fg=C["muted"]).grid(row=3, column=0, sticky="w", pady=(12, 0))
     var_out = tk.StringVar()
-    ent_out = ttk.Entry(main, textvariable=var_out, width=88)
-    ent_out.grid(row=3, column=1, columnspan=2, sticky="ew", padx=(4, 4), pady=(4, 0))
-    btn_out = ttk.Button(main, text="选择输出目录", width=16)
-    btn_out.grid(row=3, column=3, sticky="w", pady=(4, 0))
+    ent_out = ttk.Entry(cfg_in, textvariable=var_out, font=(F, 10))
+    ent_out.grid(row=3, column=1, columnspan=2, sticky="ew", padx=(12, 0), pady=(12, 0), ipady=3)
+    btn_out = tk.Button(cfg_in, text="选择输出目录", width=16,
+                        bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
+                        activeforeground=C["txt"], bd=0, relief="flat",
+                        font=(F, 9), cursor="hand2", pady=5)
+    btn_out.grid(row=3, column=3, sticky="w", padx=(10, 0), pady=(12, 0))
 
-    ttk.Label(main, text="解压密码：").grid(row=4, column=0, sticky="w", pady=(4, 0))
+    tk.Label(cfg_in, text="解压密码", font=(F, 10), bg=C["panel"],
+             fg=C["muted"]).grid(row=4, column=0, sticky="w", pady=(12, 0))
     var_pwd = tk.StringVar()
-    ent_pwd = ttk.Entry(main, textvariable=var_pwd, show="*", width=26)
-    ent_pwd.grid(row=4, column=1, sticky="w", padx=(4, 4), pady=(4, 0))
+    ent_pwd = ttk.Entry(cfg_in, textvariable=var_pwd, show="*", width=22, font=(F, 10))
+    ent_pwd.grid(row=4, column=1, sticky="w", padx=(12, 0), pady=(12, 0), ipady=3)
     var_auto = tk.BooleanVar(value=False)
-    chk_auto = ttk.Checkbutton(main, text="启用自动删除已处理分卷（默认关闭 = 只解压不删）",
+    chk_auto = ttk.Checkbutton(cfg_in, text="启用自动删除已处理分卷（默认关闭 = 只解压不删）",
                                variable=var_auto)
-    chk_auto.grid(row=4, column=2, columnspan=2, sticky="w", pady=(4, 0))
+    chk_auto.grid(row=4, column=2, columnspan=2, sticky="w", padx=(16, 0), pady=(12, 0))
+    cfg_in.columnconfigure(1, weight=1)
+    cfg_in.columnconfigure(2, weight=1)
 
-    # ---------- 操作区 ----------
-    bar = ttk.Frame(main)
-    bar.grid(row=5, column=0, columnspan=4, sticky="ew", pady=(12, 6))
-    btn_check = ttk.Button(bar, text="预校验全部分卷", width=20)
-    btn_check.pack(side="left", padx=(0, 8))
-    btn_start = ttk.Button(bar, text="开始解压", width=18)
-    btn_start.pack(side="left", padx=(0, 8))
-    btn_stop = ttk.Button(bar, text="停止", width=12, state="disabled")
-    btn_stop.pack(side="left")
-    var_status = tk.StringVar(value="就绪")
-    ttk.Label(bar, textvariable=var_status, font=("Microsoft YaHei UI", 10)).pack(side="right")
+    # ---------- 操作卡片 ----------
+    ops = card(content)
+    ops.pack(fill="x", pady=(14, 0))
+    ops_in = tk.Frame(ops, bg=C["panel"])
+    ops_in.pack(fill="both", padx=18, pady=16)
 
-    # 右键菜单安装/卸载按钮（放在状态标签左侧）
+    tk.Label(ops_in, text="02  执行操作", font=(F, 11, "bold"), bg=C["panel"],
+             fg=C["accent"]).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 14))
+
+    btn_check = tk.Button(ops_in, text="◈  预校验全部分卷", width=19,
+                          bg=C["panel2"], fg=C["txt"], activebackground=C["line"],
+                          activeforeground=C["txt"], bd=0, relief="flat",
+                          font=(F, 10), cursor="hand2", pady=10)
+    btn_check.grid(row=1, column=0, sticky="w")
+    btn_start = tk.Button(ops_in, text="▶  开始解压", width=18,
+                          bg=C["accent"], fg="#ffffff", activebackground=C["accent_hi"],
+                          activeforeground="#ffffff", bd=0, relief="flat",
+                          font=(F, 11, "bold"), cursor="hand2", pady=10)
+    btn_start.grid(row=1, column=1, sticky="w", padx=(12, 0))
+    btn_stop = tk.Button(ops_in, text="■  停止", width=12,
+                          bg=C["panel2"], fg=C["muted"], activebackground=C["line"],
+                          activeforeground=C["txt"], bd=0, relief="flat",
+                          font=(F, 10), cursor="hand2", pady=10, state="disabled")
+    btn_stop.grid(row=1, column=2, sticky="w", padx=(12, 0))
+
+    # 状态徽章 + 右键菜单按钮（右上角）
     def menu_button_text() -> str:
         st = menu_install_status()
         return {"missing": "安装右键菜单", "ok": "卸载右键菜单", "moved": "修复右键菜单"}[st]
 
-    btn_menu = ttk.Button(bar, text=menu_button_text(), width=16)
+    badge = tk.Frame(ops_in, bg=C["panel2"], padx=2, pady=2)
+    badge.grid(row=0, column=3, sticky="ne", rowspan=2)
+    var_status = tk.StringVar(value="就绪")
+    lbl_status = tk.Label(badge, textvariable=var_status, font=(F, 10, "bold"),
+                          bg=C["panel2"], fg=C["green"], padx=12, pady=6)
+    lbl_status.pack(side="right")
+    btn_menu = tk.Button(badge, text=menu_button_text(), width=15,
+                         bg=C["panel2"], fg=C["muted"], activebackground=C["line"],
+                         activeforeground=C["txt"], bd=0, relief="flat",
+                         font=(F, 9), cursor="hand2", pady=5)
+    btn_menu.pack(side="right", padx=(0, 8))
 
-    def on_menu_click():
-        st = menu_install_status()
-        if st == "ok":
-            if not messagebox.askyesno("卸载右键菜单",
-                                       "确定移除资源管理器的右键菜单吗？\n（不影响程序本身，可随时重新安装）"):
-                return
-            ok = uninstall_context_menu(lambda m: emit("INFO", m))
-            if ok:
-                messagebox.showinfo("完成", "右键菜单已卸载。")
-        else:
-            tip = ("检测到右键菜单指向的是其他位置的程序，将更新为当前 exe。" if st == "moved"
-                   else "安装后，右键压缩包或文件夹即可直接用本工具打开，无需预先启动软件。\n\n是否安装？")
-            if st == "missing" and not messagebox.askyesno("安装右键菜单", tip):
-                return
-            ok = install_context_menu(lambda m: emit("INFO", m))
-            if ok:
-                messagebox.showinfo("完成", "右键菜单已安装！\n现在右键压缩包或文件夹，选择【用分卷解压工具打开】即可。")
-        btn_menu.configure(text=menu_button_text())
-
-    btn_menu.configure(command=on_menu_click)
-    btn_menu.pack(side="right", padx=(0, 12))
-
-    prog_frame = ttk.Frame(main)
-    prog_frame.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(2, 8))
+    # ---------- 进度条 ----------
+    prog_frame = tk.Frame(ops_in, bg=C["panel"])
+    prog_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(16, 0))
     var_progress = tk.DoubleVar(value=0)
     pb = ttk.Progressbar(prog_frame, variable=var_progress, maximum=100, mode="determinate")
     pb.pack(side="left", fill="x", expand=True)
     var_pct = tk.StringVar(value="0%")
-    ttk.Label(prog_frame, textvariable=var_pct, width=7, anchor="e",
-              font=("Microsoft YaHei UI", 10)).pack(side="right", padx=(8, 0))
+    tk.Label(prog_frame, textvariable=var_pct, width=7, anchor="e",
+             font=(F, 11, "bold"), bg=C["panel"], fg=C["accent"]).pack(side="right", padx=(12, 0))
 
-    # ---------- 日志区 ----------
-    log_box = scrolledtext.ScrolledText(main, height=24, wrap="word",
-                                        font=("Consolas", 10))
-    log_box.grid(row=7, column=0, columnspan=4, sticky="nsew")
+    # ---------- 日志卡片 ----------
+    log_card = card(content)
+    log_card.pack(fill="both", expand=True, pady=(14, 0))
+    log_head = tk.Frame(log_card, bg=C["panel"])
+    log_head.pack(fill="x", padx=18, pady=(14, 8))
+    tk.Label(log_head, text="03  运行日志", font=(F, 11, "bold"), bg=C["panel"],
+             fg=C["accent"]).pack(side="left")
+    tk.Label(log_head, text="实时 · 可回溯", font=(F, 9), bg=C["panel"],
+             fg=C["muted"]).pack(side="left", padx=(10, 0))
+
+    log_box = scrolledtext.ScrolledText(log_card, height=18, wrap="word",
+                                        font=(MONO, 10), bg=C["bg"], fg=C["txt"],
+                                        insertbackground=C["txt"], bd=0,
+                                        highlightbackground=C["line"],
+                                        highlightthickness=1, padx=12, pady=10)
+    log_box.pack(fill="both", expand=True, padx=18, pady=(0, 16))
     log_box.configure(state="disabled")
-    log_box.tag_config("INFO", foreground="#24292f")
-    log_box.tag_config("DBG", foreground="#7b7b7b")
-    log_box.tag_config("STEP", foreground="#0b5fa5")
-    log_box.tag_config("OK", foreground="#127a24")
-    log_box.tag_config("DEL", foreground="#a1260d")
-    log_box.tag_config("WARN", foreground="#9a6700")
-    log_box.tag_config("ERR", foreground="#c02020")
+    log_box.tag_config("INFO", foreground=C["txt"])
+    log_box.tag_config("DBG", foreground=C["muted"])
+    log_box.tag_config("STEP", foreground=C["cyan"])
+    log_box.tag_config("OK", foreground=C["green"])
+    log_box.tag_config("DEL", foreground="#ff9d8a")
+    log_box.tag_config("WARN", foreground=C["yellow"])
+    log_box.tag_config("ERR", foreground=C["red"])
 
-    main.rowconfigure(7, weight=1)
-    main.columnconfigure(1, weight=1)
-    main.columnconfigure(2, weight=1)
-
+    # ---------- 底部说明 ----------
     note = ("说明：RAR 分卷使用内置 UnRAR.exe（RARLAB 免费命令行版）；ZIP 分卷使用 Python 流式读取器。"
             "删除记录写入 logs/删除审计_日期.log。日志中的“剩余磁盘空间”按输出/分卷所在磁盘实时读取。\n"
             f"{SIGNATURE}")
-    ttk.Label(main, text=note, foreground="#666666", font=("Microsoft YaHei UI", 9),
-              wraplength=1030, justify="left").grid(row=8, column=0, columnspan=4, sticky="w", pady=(6, 0))
+    tk.Label(content, text=note, fg=C["muted"], bg=C["bg"], font=(F, 9),
+             wraplength=1080, justify="left", anchor="w").pack(fill="x", pady=(12, 0))
 
-    # ---------- 日志队列 ----------
+    # ============ 日志队列 ============
     def emit(level: str, msg: str) -> None:
         q.put((level, msg))
+
+    def set_status(text: str, color: str) -> None:
+        var_status.set(text)
+        lbl_status.configure(fg=color)
 
     def drain_queue() -> None:
         try:
@@ -1263,15 +1370,15 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
                 if level == "__done__":
                     set_busy(False)
                     if msg is None:
-                        var_status.set("已停止")
+                        set_status("已停止", C["yellow"])
                         emit("WARN", "任务已停止（未继续删除分卷）")
                     elif msg:
-                        var_status.set("完成")
+                        set_status("完成 ✓", C["green"])
                         var_progress.set(100)
                         var_pct.set("100%")
                         emit("OK", "任务完成")
                     else:
-                        var_status.set("失败/未通过")
+                        set_status("未通过", C["red"])
                         emit("ERR", "任务未通过，请检查日志")
                     continue
                 log_box.configure(state="normal")
@@ -1287,27 +1394,34 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
         for b in (btn_check, btn_start, btn_folder, btn_first, btn_out, chk_auto, ent_pwd):
             b.configure(state="disabled" if busy else "normal")
         btn_stop.configure(state="normal" if busy else "disabled")
+        if busy:
+            set_status("运行中…", C["accent"])
 
     drain_queue()
 
     def log_choice(sets):
         result = {}
-
         def pick():
             result["v"] = lb.get(lb.curselection()[0])
             dlg.destroy()
-
         dlg = tk.Toplevel(root)
         dlg.title("选择分卷组")
         dlg.geometry("560x320")
-        ttk.Label(dlg, text="检测到多组分卷，请选择要处理的一组：").pack(anchor="w", padx=12, pady=10)
-        lb = tk.Listbox(dlg, font=("Microsoft YaHei UI", 10))
+        dlg.configure(bg=C["bg"])
+        tk.Label(dlg, text="检测到多组分卷，请选择要处理的一组：",
+                 font=(F, 10), bg=C["bg"], fg=C["txt"]).pack(anchor="w", padx=12, pady=10)
+        lb = tk.Listbox(dlg, font=(F, 10), bg=C["panel2"], fg=C["txt"],
+                        selectbackground=C["accent"], selectforeground="#ffffff",
+                        bd=0, highlightthickness=1, highlightbackground=C["line"])
         for s in sets:
             lb.insert("end", f"{s.base}  ({s.count} 卷, {s.kind}, 从 {s.label(0)} 开始)")
         lb.pack(fill="both", expand=True, padx=12)
         if sets:
             lb.selection_set(0)
-        ttk.Button(dlg, text="确定", command=pick).pack(pady=10)
+        tk.Button(dlg, text="确定", command=pick, bg=C["accent"], fg="#ffffff",
+                  activebackground=C["accent_hi"], activeforeground="#ffffff",
+                  bd=0, relief="flat", font=(F, 10), cursor="hand2",
+                  padx=20, pady=6).pack(pady=12)
         dlg.wait_window()
         return sets[result["v"]] if "v" in result else sets[0]
 
@@ -1316,10 +1430,11 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
         result = {"ok": False}
         dlg = tk.Toplevel(root)
         dlg.title("二次确认：启用自动删除")
-        dlg.geometry("640x380")
+        dlg.geometry("640x390")
         dlg.resizable(False, False)
         dlg.transient(root)
         dlg.grab_set()
+        dlg.configure(bg=C["bg"])
         txt = (
             "你已勾选【启用自动删除已处理分卷】。\n\n"
             "• 程序会在确认后续分卷已开始读取、且当前分卷数据已写入输出文件后，删除已处理分卷。\n"
@@ -1328,21 +1443,26 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
             "强烈建议：先点【预校验全部分卷】，并确认已有备份或可以承受数据丢失风险。"
         )
         tk.Label(dlg, text=txt, justify="left", anchor="w", wraplength=600,
-                 font=("Microsoft YaHei UI", 10), fg="#a1260d").pack(padx=16, pady=14, anchor="w")
+                 font=(F, 10), fg="#e3a397", bg=C["bg"]).pack(padx=18, pady=18, anchor="w")
         var_ack = tk.BooleanVar(value=False)
         btn_ok = {}
-
         def toggle():
-            btn_ok["b"].configure(state="normal" if var_ack.get() else "disabled")
-
-        ttk.Checkbutton(dlg, text="我已知晓风险，确认启用自动删除", variable=var_ack,
-                        command=toggle).pack(anchor="w", padx=16)
-        btns = ttk.Frame(dlg)
-        btns.pack(pady=16)
-        btn_ok["b"] = ttk.Button(btns, text="确认并开始", state="disabled",
-                                 command=lambda: (result.update(ok=True), dlg.destroy()))
-        btn_ok["b"].pack(side="left", padx=6)
-        ttk.Button(btns, text="取消", command=dlg.destroy).pack(side="left", padx=6)
+            btn_ok["b"].configure(state="normal" if var_ack.get() else "disabled",
+                                  bg=C["red"] if var_ack.get() else C["panel2"],
+                                  fg="#ffffff" if var_ack.get() else C["muted"])
+        chk = ttk.Checkbutton(dlg, text="我已知晓风险，确认启用自动删除", variable=var_ack,
+                              command=toggle)
+        chk.pack(anchor="w", padx=18)
+        btns = tk.Frame(dlg, bg=C["bg"])
+        btns.pack(pady=18)
+        btn_ok["b"] = tk.Button(btns, text="确认并开始", state="disabled",
+                                command=lambda: (result.update(ok=True), dlg.destroy()),
+                                bg=C["panel2"], fg=C["muted"], bd=0, relief="flat",
+                                font=(F, 10, "bold"), cursor="hand2", padx=18, pady=7)
+        btn_ok["b"].pack(side="left", padx=8)
+        tk.Button(btns, text="取消", command=dlg.destroy, bg=C["panel2"], fg=C["txt"],
+                  activebackground=C["line"], activeforeground=C["txt"], bd=0,
+                  relief="flat", font=(F, 10), cursor="hand2", padx=18, pady=7).pack(side="left", padx=8)
         dlg.wait_window()
         return result["ok"]
 
@@ -1433,11 +1553,32 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
     def do_stop():
         stop_event.set()
         emit("WARN", "已发送停止请求，正在安全中止…")
-        var_status.set("正在停止…")
+        set_status("正在停止…", C["yellow"])
 
     btn_check.configure(command=do_check)
     btn_start.configure(command=do_start)
     btn_stop.configure(command=do_stop)
+
+    def on_menu_click():
+        st = menu_install_status()
+        if st == "ok":
+            if not messagebox.askyesno("卸载右键菜单",
+                                       "确定移除资源管理器的右键菜单吗？\n（不影响程序本身，可随时重新安装）"):
+                return
+            ok = uninstall_context_menu(lambda m: emit("INFO", m))
+            if ok:
+                messagebox.showinfo("完成", "右键菜单已卸载。")
+        else:
+            tip = ("检测到右键菜单指向的是其他位置的程序，将更新为当前 exe。" if st == "moved"
+                   else "安装后，右键压缩包或文件夹即可直接用本工具打开，无需预先启动软件。\n\n是否安装？")
+            if st == "missing" and not messagebox.askyesno("安装右键菜单", tip):
+                return
+            ok = install_context_menu(lambda m: emit("INFO", m))
+            if ok:
+                messagebox.showinfo("完成", "右键菜单已安装！\n现在右键压缩包或文件夹，选择【分卷解压 ·】开头的选项即可。")
+        btn_menu.configure(text=menu_button_text())
+
+    btn_menu.configure(command=on_menu_click)
 
     emit("INFO", "就绪。RAR 分卷推荐使用 .part1.rar 命名；ZIP 分卷推荐 .zip.001 命名。")
 
@@ -1484,7 +1625,6 @@ def build_gui(initial_path: str = "", quick_mode: str = ""):
         root.after(300, apply_quick)
 
     return root
-
 
 # ---------------------------------------------------------------------------
 # 命令行模式
